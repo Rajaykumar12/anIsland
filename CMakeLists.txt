@@ -11,11 +11,18 @@ find_package(glfw3 REQUIRED)
 
 # Add your source files
 set(SOURCES
-    main.cpp          # main.cpp lives at project root
+    main_new.cpp          # Refactored main with modular systems
     src/Terrain.cpp
     src/Camera.cpp
     src/NoiseMap.cpp
     src/Shader.cpp
+    src/TreeSystem.cpp
+    src/BuildingSystem.cpp
+    src/NPCSystem.cpp
+    src/ParticleSystem.cpp
+    src/WaterSystem.cpp
+    src/GrassSystem.cpp
+    src/LightingSystem.cpp
     glad.c            # Using the glad.c present at project root
 )
 
