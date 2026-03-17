@@ -19,10 +19,10 @@ public:
     float MouseSensitivity;
     float Zoom;
 
-    Camera(glm::vec3 position = glm::vec3(50.0f, 20.0f, 50.0f),
+    Camera(glm::vec3 position = glm::vec3(125.0f, 200.0f, 175.0f),
            glm::vec3 up       = glm::vec3(0.0f,  1.0f,  0.0f),
            float yaw          = -90.0f,
-           float pitch        = -20.0f);
+           float pitch        = -35.0f);
 
     glm::mat4 GetViewMatrix() const;
     void ProcessKeyboard(Camera_Movement direction, float deltaTime);
