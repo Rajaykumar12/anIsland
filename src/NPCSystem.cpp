@@ -2,7 +2,9 @@
 #include "Shader.h"
 #include <glad/glad.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <cstdlib>
+#include <cmath>
 
 NPCSystem::NPCSystem() {
     SetupGeometry();
@@ -78,22 +80,48 @@ void NPCSystem::SetupGeometry() {
 
 void NPCSystem::SetupInstances() {
     personTranslations.clear();
-    
-    srand(99); // Different seed for people
+    personBases.clear();
+    patrolRadius.clear();
+    patrolPhase.clear();
+
+    srand(99);
     for (int i = 0; i < 30; i++) {
-        float x = 100.0f + (rand() % 50) * 0.5f;
-        float z = 150.0f + (rand() % 50) * 0.5f;
-        personTranslations.push_back(glm::vec3(x, 10.0f, z));
+        // Base position inside town
+        float bx = 110.0f + (rand() % 30);
+        float bz = 155.0f + (rand() % 40);
+        personBases.push_back(glm::vec3(bx, 10.0f, bz));
+        personTranslations.push_back(glm::vec3(bx, 10.0f, bz));
+        patrolRadius.push_back(5.0f + (rand() % 10));   // orbit radius 5-15
+        patrolPhase.push_back((float)(rand() % 628) / 100.0f); // 0-2pi
     }
 
     glBindVertexArray(personVAO);
     glBindBuffer(GL_ARRAY_BUFFER, personInstanceVBO);
+    // Use GL_DYNAMIC_DRAW because we update positions every frame
     glBufferData(GL_ARRAY_BUFFER, personTranslations.size() * sizeof(glm::vec3),
-                 personTranslations.data(), GL_STATIC_DRAW);
+                 personTranslations.data(), GL_DYNAMIC_DRAW);
     glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(3);
     glVertexAttribDivisor(3, 1);
     glBindVertexArray(0);
+}
+
+void NPCSystem::Update(float currentTime) {
+    for (int i = 0; i < (int)personTranslations.size(); i++) {
+        float angle = currentTime * 0.25f + patrolPhase[i];
+        float r = patrolRadius[i];
+        personTranslations[i].x = personBases[i].x + r * std::cos(angle);
+        personTranslations[i].z = personBases[i].z + r * std::sin(angle);
+        // Y stays at ground level
+        personTranslations[i].y = personBases[i].y;
+    }
+
+    // Upload updated positions to GPU
+    glBindBuffer(GL_ARRAY_BUFFER, personInstanceVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0,
+                    personTranslations.size() * sizeof(glm::vec3),
+                    personTranslations.data());
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void NPCSystem::Render(const glm::mat4& projection, const glm::mat4& view,
@@ -105,6 +133,6 @@ void NPCSystem::Render(const glm::mat4& projection, const glm::mat4& view,
     shader.setFloat("u_Time",    currentTime);
 
     glBindVertexArray(personVAO);
-    glDrawArraysInstanced(GL_TRIANGLES, 0, personVertexCount, personTranslations.size());
+    glDrawArraysInstanced(GL_TRIANGLES, 0, personVertexCount, (int)personTranslations.size());
     glBindVertexArray(0);
 }
