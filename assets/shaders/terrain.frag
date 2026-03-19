@@ -9,9 +9,12 @@ in vec3 FragPos;
 in vec4 FragPosLightSpace;
 
 uniform vec3 skyColor;
+uniform vec3 lightDir;        // normalized sun direction from CPU
+uniform vec3 lightColor;      // sun color (warm day, cool night)
+uniform vec3 sunsetTint;      // orange/red tint at dawn/dusk
 uniform sampler2D shadowMap;
 
-float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
+float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lDir)
 {
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
@@ -19,7 +22,7 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir)
     if(projCoords.z > 1.0) return 0.0;
 
     float currentDepth = projCoords.z;
-    float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
+    float bias = max(0.05 * (1.0 - dot(normal, lDir)), 0.005);
 
     float shadow = 0.0;
     vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
@@ -68,33 +71,29 @@ void main()
     float detail = sin(detailCoord.x * 12.9898 + detailCoord.y * 78.233) * 0.5 + 0.5;
     terrainColor += detail * 0.05;
 
-    // Light direction (sun in sky)
-    vec3 lightDir = normalize(vec3(0.8, 1.0, 0.5));
+    // Dynamic light direction (follows the sun)
     vec3 norm = normalize(Normal);
-    
+
     // Calculate shadow
     float shadow = ShadowCalculation(FragPosLightSpace, norm, lightDir);
-    
-    // Phong lighting
+
+    // Phong lighting with dynamic sun color
     float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * terrainColor * 0.8;
-    
-    vec3 ambient = terrainColor * 0.4;
-    
-    // Slope shadowing for more drama
+    vec3 diffuse  = diff * terrainColor * lightColor * 0.8;
+    vec3 ambient  = terrainColor * mix(vec3(0.15), lightColor * 0.5, 0.6);
+
+    // Slope shadowing for drama
     float slope = 1.0 - dot(norm, vec3(0.0, 1.0, 0.0));
-    vec3 litColor = mix(ambient + diffuse, ambient, slope * 0.3);
-    
-    // Apply shadow to diffuse component
-    litColor = ambient + (1.0 - shadow) * (diffuse + slope * 0.3 * terrainColor * 0.2);
+    vec3 litColor = ambient + (1.0 - shadow) * (diffuse + slope * 0.3 * terrainColor * 0.2);
+
+    // Sunset/sunrise warm tint
+    litColor = mix(litColor, litColor * (vec3(1.0) + sunsetTint * 1.2), 0.4);
 
     // Distance Fog (Exponential)
     float fogDensity = 0.0002;
-    float fogFactor = exp(-pow(Distance * fogDensity, 2.0));
+    float fogFactor  = exp(-pow(Distance * fogDensity, 2.0));
     fogFactor = clamp(fogFactor, 0.0, 1.0);
 
-    // Mix terrain color with sky color based on fog factor
     vec3 finalColor = mix(skyColor, litColor, fogFactor);
-
     FragColor = vec4(finalColor, 1.0);
 }
