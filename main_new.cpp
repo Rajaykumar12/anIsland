@@ -1,6 +1,6 @@
 // ============================================================
 // OpenGL Terrain Visualization - Modular Architecture
-// Systems: Terrain, Trees, Buildings, NPCs, Particles, Water, Lighting, Grass
+// Systems: Terrain, Trees, Buildings, NPCs, Particles, Water, Lighting, Grass, Rain
 // ============================================================
 
 #include <glad/glad.h>
@@ -25,6 +25,8 @@
 #include "WaterSystem.h"
 #include "GrassSystem.h"
 #include "LightingSystem.h"
+#include "RainSystem.h"
+#include "ColonySystem.h"
 
 // ---- Window dimensions ----
 const unsigned int SCR_WIDTH  = 1280;
@@ -69,6 +71,9 @@ void scroll_callback(GLFWwindow* /*win*/, double /*xoffset*/, double yoffset) {
     camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
 
+// Rain system forward reference for key callback
+RainSystem* g_rainSystem = nullptr;
+
 void processInput(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
@@ -89,6 +94,14 @@ void processInput(GLFWwindow* window) {
         glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
     }
     fWasDown = fIsDown;
+
+    // Toggle rain with R
+    static bool rWasDown = false;
+    bool rIsDown = glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS;
+    if (rIsDown && !rWasDown && g_rainSystem) {
+        g_rainSystem->Toggle();
+    }
+    rWasDown = rIsDown;
 }
 
 unsigned int createHeightmapTexture(const std::vector<float>& data, int width, int height) {
@@ -213,29 +226,34 @@ int main() {
     unsigned int heightmapTex = createHeightmapTexture(noiseData, HM_W, HM_H);
 
     // ---- 4. Initialize Systems ----
-    Terrain terrain(800, 800);
-    TreeSystem treeSystem(noiseData, HM_W, HM_H, 800, 800);
-    GrassSystem grassSystem(noiseData, HM_W, HM_H, 800, 800);
+    Terrain       terrain(800, 800);
+    TreeSystem    treeSystem(noiseData, HM_W, HM_H, 800, 800);
+    GrassSystem   grassSystem(noiseData, HM_W, HM_H, 800, 800);
     BuildingSystem buildingSystem;
-    NPCSystem npcSystem;
+    NPCSystem     npcSystem;
+    ColonySystem  colonySystem(noiseData, HM_W, HM_H, 800, 800);
     ParticleSystem particleSystem(500);
-    WaterSystem waterSystem(2000, 2000);  // Larger mesh for 5x ocean area
+    WaterSystem   waterSystem(2000, 2000);
     LightingSystem lightingSystem;
+    RainSystem    rainSystem(5000);
+    g_rainSystem = &rainSystem;
 
     // ---- 5. Load Shaders ----
-    Shader terrainShader("assets/shaders/terrain.vert",   "assets/shaders/terrain.frag");
-    Shader treeShader("assets/shaders/tree.vert",         "assets/shaders/tree.frag");
-    Shader grassShader("assets/shaders/grass.vert",       "assets/shaders/grass.frag");
+    Shader terrainShader ("assets/shaders/terrain.vert",  "assets/shaders/terrain.frag");
+    Shader treeShader    ("assets/shaders/tree.vert",     "assets/shaders/tree.frag");
+    Shader grassShader   ("assets/shaders/grass.vert",    "assets/shaders/grass.frag");
     Shader buildingShader("assets/shaders/building.vert", "assets/shaders/building.frag");
-    Shader personShader("assets/shaders/person.vert",     "assets/shaders/person.frag");
+    Shader personShader  ("assets/shaders/person.vert",   "assets/shaders/person.frag");
     Shader particleShader("assets/shaders/particle.vert", "assets/shaders/particle.frag");
-    Shader waterShader("assets/shaders/water.vert",       "assets/shaders/water.frag");
-    Shader skyboxShader("assets/shaders/skybox.vert",     "assets/shaders/skybox.frag");
+    Shader waterShader   ("assets/shaders/water.vert",    "assets/shaders/water.frag");
+    Shader skyboxShader  ("assets/shaders/skybox.vert",   "assets/shaders/skybox.frag");
+    Shader rainShader    ("assets/shaders/rain.vert",     "assets/shaders/rain.frag");
+    Shader depthShader   ("assets/shaders/depth.vert",    "assets/shaders/depth.frag");
 
     // Tell terrain shader which texture unit holds the heightmap
     terrainShader.use();
     terrainShader.setInt("heightMap", 0);
-    
+
     // Create skybox VAO
     unsigned int skyboxVAO = createSkyboxCube();
 
@@ -250,35 +268,62 @@ int main() {
         // Update lighting/day-night cycle
         lightingSystem.Update(currentFrame);
 
+        // Compute dynamic wind strength (slow sine, 0->1)
+        float windStrength = 0.5f + 0.5f * std::sin(currentFrame * 0.15f);
+
+        // Update moving systems
+        npcSystem.Update(currentFrame);
+        colonySystem.Update(currentFrame);
+        particleSystem.Update(deltaTime);
+        rainSystem.Update(deltaTime, camera.Position);
+
+        // Retrieve lighting values once per frame
+        glm::vec3 lightDir    = lightingSystem.GetLightDir();
+        glm::vec3 lightColor  = lightingSystem.GetSunColor() * lightingSystem.GetSunIntensity();
+        glm::vec3 sunsetTint  = lightingSystem.GetSunsetTint();
+        glm::vec3 skyColor    = lightingSystem.GetSkyColor();
+        float     dayIntensity = lightingSystem.GetDayIntensity();
+
         // Get window dimensions
         int currentWidth, currentHeight;
         glfwGetFramebufferSize(window, &currentWidth, &currentHeight);
 
         // ============================================================
         // PASS 1: DEPTH PASS - Render from light's perspective
+        // (now includes trees, buildings for proper shadows)
         // ============================================================
-        Shader depthShader("assets/shaders/depth.vert", "assets/shaders/depth.frag");
-        
+        glm::mat4 lightProj = lightingSystem.GetLightProjection();
+        glm::mat4 lightView = lightingSystem.GetLightView();
+
         glViewport(0, 0, 2048, 2048);
         glBindFramebuffer(GL_FRAMEBUFFER, lightingSystem.GetDepthMapFBO());
         glClear(GL_DEPTH_BUFFER_BIT);
-        
+
         depthShader.use();
         depthShader.setMat4("lightSpaceMatrix", lightingSystem.GetLightSpaceMatrix());
         depthShader.setMat4("model", glm::mat4(1.0f));
-        
+
         // Draw terrain to depth map
         terrain.Draw();
-        
+
+        // Draw trees to depth map – they now cast shadows on the terrain!
+        treeSystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader);
+
+        // Draw buildings to depth map
+        buildingSystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader);
+
+        // Draw huts to depth map
+        colonySystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader, depthShader, currentFrame);
+
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        
+
+
         // ============================================================
         // PASS 2: COLOR PASS - Render from camera's perspective
         // ============================================================
         glViewport(0, 0, currentWidth, currentHeight);
-        
-        glClearColor(lightingSystem.GetSkyColor().r, lightingSystem.GetSkyColor().g, 
-                     lightingSystem.GetSkyColor().b, 1.0f);
+
+        glClearColor(skyColor.r, skyColor.g, skyColor.b, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Calculate matrices
@@ -287,87 +332,87 @@ int main() {
         glm::mat4 view  = camera.GetViewMatrix();
         glm::mat4 model = glm::mat4(1.0f);
 
-        // Calculate fog color based on day/night cycle
-        // Sun intensity ranges from 0.0 (night) to ~1.5 (noon)
-        float dayIntensity = glm::max(0.0f, glm::min(1.0f, lightingSystem.GetSunIntensity() - 0.2f) / 1.3f);
-        glm::vec3 dayFogColor = glm::vec3(0.5f, 0.6f, 0.7f);
-        glm::vec3 nightFogColor = glm::vec3(0.01f, 0.01f, 0.02f);
-        glm::vec3 currentFogColor = glm::mix(nightFogColor, dayFogColor, dayIntensity);
+        // --- Helper lambda: set common scene uniforms on a shader ---
+        auto setSceneUniforms = [&](Shader& sh) {
+            sh.use();
+            sh.setVec3("skyColor",    skyColor);
+            sh.setVec3("lightDir",    lightDir);
+            sh.setVec3("lightColor",  lightColor);
+            sh.setVec3("sunsetTint",  sunsetTint);
+            sh.setVec3("cameraPos",   camera.Position);
+        };
 
-        // Pass camera position and fog color to all shaders
+        setSceneUniforms(terrainShader);
+        setSceneUniforms(treeShader);
+        setSceneUniforms(grassShader);
+        setSceneUniforms(buildingShader);
+        setSceneUniforms(personShader);
+        setSceneUniforms(waterShader);
+
+        // --- Draw Terrain (with shadows) ---
         terrainShader.use();
-        terrainShader.setVec3("cameraPos", camera.Position);
-        terrainShader.setVec3("fogColor", currentFogColor);
-
-        treeShader.use();
-        treeShader.setVec3("cameraPos", camera.Position);
-        treeShader.setVec3("fogColor", currentFogColor);
-
-        grassShader.use();
-        grassShader.setVec3("cameraPos", camera.Position);
-        grassShader.setVec3("fogColor", currentFogColor);
-
-        buildingShader.use();
-        buildingShader.setVec3("cameraPos", camera.Position);
-        buildingShader.setVec3("fogColor", currentFogColor);
-
-        personShader.use();
-        personShader.setVec3("cameraPos", camera.Position);
-        personShader.setVec3("fogColor", currentFogColor);
-
-        waterShader.use();
-        waterShader.setVec3("cameraPos", camera.Position);
-        waterShader.setVec3("fogColor", currentFogColor);
-
-        // --- Draw Terrain (now with shadows) ---
-        terrainShader.use();
-        terrainShader.setMat4("projection", projection);
-        terrainShader.setMat4("view",       view);
-        terrainShader.setMat4("model",      model);
+        terrainShader.setMat4("projection",      projection);
+        terrainShader.setMat4("view",            view);
+        terrainShader.setMat4("model",           model);
         terrainShader.setMat4("lightSpaceMatrix", lightingSystem.GetLightSpaceMatrix());
-        terrainShader.setVec3("skyColor",   lightingSystem.GetSkyColor());
-        
+
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, heightmapTex);
-        
+
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, lightingSystem.GetDepthMapTexture());
         terrainShader.setInt("shadowMap", 1);
-        
+
         terrain.Draw();
 
         // --- Draw Grass ---
         grassShader.use();
-        grassShader.setMat4("projection", projection);
-        grassShader.setMat4("view", view);
-        grassShader.setVec3("skyColor", lightingSystem.GetSkyColor());
+        grassShader.setMat4 ("projection",   projection);
+        grassShader.setMat4 ("view",         view);
+        grassShader.setFloat("u_Time",       currentFrame);
+        grassShader.setFloat("windStrength", windStrength);
         grassSystem.Draw();
 
-        // --- Draw Trees ---
-        treeSystem.Render(projection, view, lightingSystem.GetSkyColor(), treeShader);
+        // --- Draw Trees (with canopy sway) ---
+        treeShader.use();
+        treeShader.setFloat("u_Time",       currentFrame);
+        treeShader.setFloat("windStrength", windStrength);
+        treeSystem.Render(projection, view, skyColor, treeShader);
 
         // --- Draw Buildings ---
-        buildingSystem.Render(projection, view, lightingSystem.GetSkyColor(), buildingShader);
+        buildingSystem.Render(projection, view, skyColor, buildingShader);
+
+        // --- Draw Colony (huts and villagers) ---
+        colonySystem.Render(projection, view, skyColor, buildingShader, personShader, currentFrame);
 
         // --- Draw NPCs ---
-        npcSystem.Render(projection, view, lightingSystem.GetSkyColor(), personShader, currentFrame);
+        npcSystem.Render(projection, view, skyColor, personShader, currentFrame);
 
         // --- Draw Water ---
-        waterSystem.Render(projection, view, waterShader, currentFrame, 
-                          lightingSystem.GetSunColor() * lightingSystem.GetSunIntensity());
+        waterShader.use();
+        waterShader.setVec3("lightDir",   lightDir);
+        waterShader.setVec3("lightColor", lightColor);
+        waterShader.setVec3("sunsetTint", sunsetTint);
+        waterShader.setVec3("cameraPos",  camera.Position);
+        waterShader.setVec3("skyColor",   skyColor);
+        waterSystem.Render(projection, view, waterShader, currentFrame,
+                           lightingSystem.GetSunColor() * lightingSystem.GetSunIntensity());
 
-        // --- Update and Draw Particles ---
-        particleSystem.Update(deltaTime);
+        // --- Draw Firefly Particles (only at night) ---
+        particleShader.use();
+        particleShader.setFloat("dayIntensity", dayIntensity);
         particleSystem.Render(projection, view, particleShader);
+
+        // --- Draw Rain (if enabled, toggle with R) ---
+        rainSystem.Render(projection, view, rainShader);
 
         // === Draw Skybox (last, with special depth handling) ===
         glDepthFunc(GL_LEQUAL);
         skyboxShader.use();
-        // Remove translation from view matrix so skybox follows camera
-        glm::mat4 skyView = glm::mat4(glm::mat3(view));
-        skyboxShader.setMat4("view", skyView);
+        glm::mat4 skyView = glm::mat4(glm::mat3(view)); // remove translation
+        skyboxShader.setMat4("view",       skyView);
         skyboxShader.setMat4("projection", projection);
-        skyboxShader.setVec3("sunPos", lightingSystem.GetSunPosition());
+        skyboxShader.setVec3("sunPos",     lightingSystem.GetSunPosition());
 
         glBindVertexArray(skyboxVAO);
         glDrawArrays(GL_TRIANGLES, 0, 36);
