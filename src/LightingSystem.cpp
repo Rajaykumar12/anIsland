@@ -68,17 +68,28 @@ void LightingSystem::Update(float currentTime) {
 void LightingSystem::CalculateLighting() {
     // Calculate light color based on sun position (Y ranges from -100 to +100)
     timeOfDay = (sunPos.y + sunRadius) / (2.0f * sunRadius); // 0 to 1
+
+    // dayIntensity: 0=night, 1=full day (smoothed at horizon)
+    dayIntensity = glm::smoothstep(0.0f, 0.35f, timeOfDay);
+
     lightColor = glm::mix(
         glm::vec3(0.3f, 0.2f, 0.5f),  // Night: dark blue
         glm::vec3(1.0f, 1.0f, 0.9f),   // Day: bright yellow-white
         glm::clamp(timeOfDay, 0.0f, 1.0f)
     );
     lightIntensity = glm::mix(0.2f, 1.0f, glm::clamp(timeOfDay, 0.0f, 1.0f));
-    
-    // Update sky color based on sun position
-    skyColor = glm::mix(
-        glm::vec3(0.1f, 0.1f, 0.2f),   // Night sky
-        glm::vec3(0.7f, 0.8f, 1.0f),   // Day sky
-        glm::clamp(timeOfDay, 0.0f, 1.0f)
-    );
+
+    // Sunset / sunrise band: peaks near horizon (timeOfDay ~0.25 and ~0.75)
+    // Use the absolute-value trick: strongest when |sin(angle)| is small
+    float sunAngle = timeOfDay * 2.0f * 3.14159f;
+    float sunsetStrength = glm::smoothstep(0.15f, 0.35f, timeOfDay)
+                         * glm::smoothstep(0.60f, 0.40f, timeOfDay);
+    sunsetTint = glm::vec3(1.0f, 0.55f, 0.2f) * sunsetStrength * 0.9f;
+
+    // Update sky color with sunset overlay
+    glm::vec3 daySky   = glm::vec3(0.7f, 0.8f, 1.0f);
+    glm::vec3 nightSky = glm::vec3(0.02f, 0.02f, 0.05f);
+    skyColor = glm::mix(nightSky, daySky, glm::clamp(timeOfDay, 0.0f, 1.0f))
+             + glm::vec3(0.25f, 0.12f, 0.04f) * sunsetStrength;  // warm sky at sunset
 }
+
