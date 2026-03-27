@@ -47,6 +47,25 @@ void Camera::ProcessMouseScroll(float yoffset) {
     if (Zoom > 90.0f) Zoom = 90.0f;
 }
 
+void Camera::SetPosition(glm::vec3 pos) {
+    Position = pos;
+}
+
+void Camera::SetLookAt(glm::vec3 target) {
+    // Calculate direction from position to target
+    glm::vec3 direction = glm::normalize(target - Position);
+    
+    // Calculate Yaw and Pitch from direction vector
+    Yaw = glm::degrees(atan2(direction.z, direction.x));
+    Pitch = glm::degrees(asin(direction.y));
+    
+    updateCameraVectors();
+}
+
+void Camera::SetZoom(float fov) {
+    Zoom = glm::clamp(fov, 1.0f, 90.0f);
+}
+
 void Camera::updateCameraVectors() {
     glm::vec3 front;
     front.x = cos(glm::radians(Yaw)) * cos(glm::radians(Pitch));

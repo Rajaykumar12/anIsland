@@ -27,6 +27,7 @@
 #include "LightingSystem.h"
 #include "RainSystem.h"
 #include "ColonySystem.h"
+#include "CinematicCamera.h"
 
 // ---- Window dimensions ----
 const unsigned int SCR_WIDTH  = 1280;
@@ -42,6 +43,11 @@ bool  firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
+// ---- Cinematic camera system ----
+CinematicCamera cinematicCamera;
+bool cinematicMode = false;
+float cinematicStartTime = 0.0f;
+
 // -------------------------------------------------------
 // GLFW Callbacks
 // -------------------------------------------------------
@@ -50,6 +56,9 @@ void framebuffer_size_callback(GLFWwindow* /*win*/, int width, int height) {
 }
 
 void mouse_callback(GLFWwindow* /*win*/, double xposIn, double yposIn) {
+    // Skip mouse input during cinematic
+    if (cinematicMode) return;
+    
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
 
@@ -75,8 +84,28 @@ void scroll_callback(GLFWwindow* /*win*/, double /*xoffset*/, double yoffset) {
 RainSystem* g_rainSystem = nullptr;
 
 void processInput(GLFWwindow* window) {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
+    // Handle ESC: exit cinematic if active, or close window
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+        if (cinematicMode) {
+            cinematicMode = false;
+            firstMouse = true;  // Reset mouse state when exiting cinematic
+        } else {
+            glfwSetWindowShouldClose(window, true);
+        }
+    }
+
+    // Handle C: start cinematic sequence (only when not already playing)
+    static bool cWasDown = false;
+    bool cIsDown = glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS;
+    if (cIsDown && !cWasDown && !cinematicMode) {
+        cinematicMode = true;
+        cinematicStartTime = static_cast<float>(glfwGetTime());
+        firstMouse = true;  // Reset mouse state when entering cinematic
+    }
+    cWasDown = cIsDown;
+
+    // Skip player input during cinematic mode
+    if (cinematicMode) return;
 
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.ProcessKeyboard(FORWARD,  deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.ProcessKeyboard(BACKWARD, deltaTime);
@@ -238,6 +267,9 @@ int main() {
     RainSystem    rainSystem(5000);
     g_rainSystem = &rainSystem;
 
+    // Initialize cinematic camera with keyframes
+    cinematicCamera.Initialize();
+
     // ---- 5. Load Shaders ----
     Shader terrainShader ("assets/shaders/terrain.vert",  "assets/shaders/terrain.frag");
     Shader treeShader    ("assets/shaders/tree.vert",     "assets/shaders/tree.frag");
@@ -264,6 +296,25 @@ int main() {
         lastFrame = currentFrame;
 
         processInput(window);
+
+        // Update cinematic camera if active
+        if (cinematicMode) {
+            float elapsed = currentFrame - cinematicStartTime;
+            
+            // Check if cinematic finished
+            if (cinematicCamera.IsFinished(elapsed)) {
+                cinematicMode = false;
+                firstMouse = true;
+            } else {
+                // Get interpolated camera state
+                CinematicKeyframe state = cinematicCamera.GetInterpolatedState(elapsed);
+                
+                // Update camera position and look-at
+                camera.SetPosition(state.position);
+                camera.SetLookAt(state.target);
+                camera.SetZoom(state.fov);
+            }
+        }
 
         // Update lighting/day-night cycle
         lightingSystem.Update(currentFrame);

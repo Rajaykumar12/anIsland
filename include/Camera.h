@@ -29,6 +29,9 @@ public:
     void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true);
     void ProcessMouseScroll(float yoffset);
 
-private:
+    // Cinematic camera control
+    void SetPosition(glm::vec3 pos);
+    void SetLookAt(glm::vec3 target);
+    void SetZoom(float fov);
     void updateCameraVectors();
 };

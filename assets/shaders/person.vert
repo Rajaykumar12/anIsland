@@ -18,11 +18,22 @@ void main()
     // Move vertex to its instanced world position
     vec3 worldPos = aPos + aOffset;
     
-    // Simple walking animation - gentle bob and sway
-    if (aPos.y > 1.0) { // Upper body parts
-        float walkAnim = sin(u_Time * 3.0 + aOffset.x * 0.5) * 0.1;
+    // Enhanced walking animation - realistic limb movement
+    if (aPos.y > 1.5) { 
+        // Head and upper body - gentle bob
+        float walkAnim = sin(u_Time * 2.5) * 0.05;
         worldPos.y += walkAnim;
-        worldPos.x += walkAnim * 0.5;
+    } else if (aPos.y < 1.0) {  
+        // Legs - swing forward and back
+        float legSwing = sin(u_Time * 2.5 + 0.3) * 0.15;
+        worldPos.z += legSwing;
+        // Slight vertical variation with stride
+        worldPos.y += abs(cos(u_Time * 2.5)) * 0.08;
+    } else {
+        // Arms - counter-rotate with body
+        float armSwing = sin(u_Time * 2.5 + 1.57) * 0.12;  // 90° phase offset
+        worldPos.z += armSwing;
+        worldPos.y += sin(u_Time * 2.5) * 0.06;
     }
     
     FragPos = worldPos;
