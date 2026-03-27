@@ -10,10 +10,11 @@ ColonySystem::ColonySystem(const std::vector<float>& noiseData, int hmWidth, int
                            int terrainWidth, int terrainHeight)
     : noiseData(noiseData), hmWidth(hmWidth), hmHeight(hmHeight),
       terrainWidth(terrainWidth), terrainHeight(terrainHeight) {
-    SetupHutGeometry();
-    SetupHutInstances();
-    SetupVillagerGeometry();
-    SetupVillagerInstances();
+    // Disabled for "The Island Remembers" - no inhabitants
+    // SetupHutGeometry();
+    // SetupHutInstances();
+    // SetupVillagerGeometry();
+    // SetupVillagerInstances();
 }
 
 ColonySystem::~ColonySystem() {
@@ -66,7 +67,7 @@ void ColonySystem::SetupHutGeometry() {
     // Features: Door, 4 windows, smoke hole
     
     std::vector<float> vertices;
-    const int sides = 8;
+    const int sides = 16;  // Increased from 8 for smoother cylinders
     const float wallHeight = 2.5f;
     const float roofHeight = 1.2f;
     const float radius = 1.8f;
@@ -437,47 +438,23 @@ void ColonySystem::SetupHutGeometry() {
 void ColonySystem::SetupHutInstances() {
     hutTranslations.clear();
     
-    // Find highest point around (380, 380) - typically elevated in this area
-    // Sample several points and pick the highest one for the colony center
-    float bestX = 380.0f;
-    float bestZ = 380.0f;
-    float maxHeight = -1.0f;
-    
-    srand(2023);
-    
-    // Sample a 10x10 grid to find the peak
-    for (int sx = 0; sx < 10; sx++) {
-        for (int sz = 0; sz < 10; sz++) {
-            float testX = 340.0f + sx * 8.0f;
-            float testZ = 340.0f + sz * 8.0f;
-            float h = SampleHeight(testX, testZ);
-            if (h > maxHeight) {
-                maxHeight = h;
-                bestX = testX;
-                bestZ = testZ;
-            }
-        }
-    }
-    
-    // Ensure we found a good hilltop location
-    const float colonyX = bestX;
-    const float colonyZ = bestZ;
-    const float baseColonyHeight = SampleHeight(colonyX, colonyZ);
+    // Move colony far away - island remembers itself without inhabitants
+    // Use impossible coordinates far off the visible world
+    const float colonyX = -1000.0f;
+    const float colonyZ = -1000.0f;
     const float colonyRadius = 80.0f;
     const int numHuts = 50;
     
-    // Spiral/grid pattern for hut placement on the hilltop
+    // Spiral/grid pattern far away
     for (int i = 0; i < numHuts; i++) {
-        // Procedural spiral layout
         float t = (float)i / numHuts;
-        float angle = t * 8.0f * 3.14159f; // 4 full rotations
+        float angle = t * 8.0f * 3.14159f;
         float r = t * colonyRadius;
         
         float x = colonyX + r * std::cos(angle);
         float z = colonyZ + r * std::sin(angle);
         
-        // Sample height at this location
-        float y = SampleHeight(x, z);
+        float y = 10.0f;
         
         hutTranslations.push_back(glm::vec3(x, y, z));
     }
