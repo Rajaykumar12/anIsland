@@ -33,13 +33,13 @@ void ParticleSystem::InitializeParticles() {
     srand(42);
     for (int i = 0; i < maxParticles; i++) {
         glm::vec3 pos(
-            50.0f  + (rand() % 200) - 100.0f,  // x: spread around forest (0-200)
-            2.0f   + (rand() % 13),             // y: 2-15 units (near tree-top height)
-            100.0f + (rand() % 200) - 100.0f   // z: spread around forest (0-200)
+            100.0f + (rand() % 50) - 25.0f,  // x: above mountain (75-125)
+            80.0f  + (rand() % 70),           // y: 80-150 units (canopy height + above)
+            100.0f + (rand() % 50) - 25.0f   // z: above mountain (75-125)
         );
         glm::vec3 vel(
             (rand() % 11 - 5) * 0.05f,  // vx: gentle drift
-            0.0f,                        // vy: mostly horizontal
+            0.2f,                        // vy: slight upward tendency
             (rand() % 11 - 5) * 0.05f   // vz: gentle drift
         );
         particlePositions.push_back(pos);
@@ -62,9 +62,9 @@ void ParticleSystem::Update(float deltaTime) {
 
         // Gentle up/down bobbing using sin
         particlePositions[i].y += 0.3f * std::sin(particlePositions[i].x * 0.7f + particlePositions[i].z * 0.5f) * 0.02f;
-        // Clamp altitude to realistic firefly range
-        if (particlePositions[i].y > 16.0f) particlePositions[i].y = 16.0f;
-        if (particlePositions[i].y < 1.5f)  particlePositions[i].y = 1.5f;
+        // Clamp altitude to firefly range - above mountain at canopy height
+        if (particlePositions[i].y > 160.0f) particlePositions[i].y = 160.0f;
+        if (particlePositions[i].y < 70.0f)  particlePositions[i].y = 70.0f;
 
         // Add slight jitter to velocity for fluttering effect
         particleVelocities[i].x += (rand() % 11 - 5) * 0.001f;
