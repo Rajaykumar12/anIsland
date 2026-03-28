@@ -1,7 +1,17 @@
 #include "GrassSystem.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/common.hpp>
+#include <algorithm>
 #include <cstdlib>
 #include <cmath>
+#include <cstddef>
+
+namespace {
+constexpr float TERRAIN_MAX_HEIGHT = 150.0f;
+constexpr float WATERLINE_MIN_HEIGHT = 2.0f;
+constexpr float MAX_GRASS_HEIGHT = 120.0f;
+constexpr float MAX_SLOPE_DEG = 55.0f;
+}
 
 GrassSystem::GrassSystem(const std::vector<float>& heightmap, int hmWidth, int hmHeight,
                          float terrainSizeX, float terrainSizeZ)
@@ -34,6 +44,12 @@ GrassSystem::GrassSystem(const std::vector<float>& heightmap, int hmWidth, int h
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(GrassInstance), (void*)0);
     glVertexAttribDivisor(2, 1); // One offset per instance
+
+    // Normal attribute (location 3) - instanced
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(GrassInstance),
+                          (void*)offsetof(GrassInstance, normal));
+    glVertexAttribDivisor(3, 1); // One normal per instance
     
     glBindVertexArray(0);
     
@@ -73,60 +89,65 @@ void GrassSystem::generateGrassInstances(const std::vector<float>& heightmap,
                                          float terrainSizeX, float terrainSizeZ) {
     instances.clear();
     
-    // Blade density: one blade per ~4 units in world space
-    float bladeSpacing = 2.0f;
+    // Increase density for fuller mountain vegetation
+    float bladeSpacing = 1.4f;
     
     // Calculate heightmap to world conversion
     float hmToWorldX = terrainSizeX / hmWidth;
     float hmToWorldZ = terrainSizeZ / hmHeight;
     
-    // Terrain center
-    float centerX = terrainSizeX / 2.0f;
-    float centerZ = terrainSizeZ / 2.0f;
-    
-    for (float x = -centerX; x < centerX; x += bladeSpacing) {
-        for (float z = -centerZ; z < centerZ; z += bladeSpacing) {
-            // Sample heightmap at this location
-            float normalizedX = (x + centerX) / terrainSizeX;
-            float normalizedZ = (z + centerZ) / terrainSizeZ;
-            
-            int hmX = static_cast<int>(normalizedX * hmWidth);
-            int hmZ = static_cast<int>(normalizedZ * hmHeight);
+    for (float x = 0.0f; x < terrainSizeX; x += bladeSpacing) {
+        for (float z = 0.0f; z < terrainSizeZ; z += bladeSpacing) {
+            // Terrain and grass share the same world-space coordinates.
+            float normalizedX = x / terrainSizeX;
+            float normalizedZ = z / terrainSizeZ;
+
+            int hmX = static_cast<int>(normalizedX * (hmWidth - 1));
+            int hmZ = static_cast<int>(normalizedZ * (hmHeight - 1));
             
             // Clamp to valid range
             hmX = std::max(0, std::min(hmWidth - 1, hmX));
             hmZ = std::max(0, std::min(hmHeight - 1, hmZ));
             
-            float height = heightmap[hmZ * hmWidth + hmX];
-            
-            // Grass only grows on grass zone (flat, lower elevations)
-            // Skip steep slopes and high elevations
-            if (height < 35.0f) { // Grass zone threshold
-                // Check slope - skip very steep terrain
-                bool isSteep = false;
-                if (hmX > 0 && hmX < hmWidth - 1 && hmZ > 0 && hmZ < hmHeight - 1) {
-                    float heightLeft = heightmap[hmZ * hmWidth + (hmX - 1)];
-                    float heightRight = heightmap[hmZ * hmWidth + (hmX + 1)];
-                    float heightUp = heightmap[(hmZ - 1) * hmWidth + hmX];
-                    float heightDown = heightmap[(hmZ + 1) * hmWidth + hmX];
-                    
-                    float slopeX = std::abs(heightRight - heightLeft);
-                    float slopeZ = std::abs(heightDown - heightUp);
-                    
-                    if (slopeX > 15.0f || slopeZ > 15.0f) {
-                        isSteep = true;
-                    }
+            float sampledHeight = heightmap[hmZ * hmWidth + hmX];
+            float worldHeight = sampledHeight * TERRAIN_MAX_HEIGHT;
+
+            // Keep grass above water and below high peaks.
+            if (worldHeight <= WATERLINE_MIN_HEIGHT || worldHeight >= MAX_GRASS_HEIGHT) {
+                continue;
+            }
+
+            glm::vec3 slopeNormal(0.0f, 1.0f, 0.0f);
+            bool isSteep = false;
+
+            if (hmX > 0 && hmX < hmWidth - 1 && hmZ > 0 && hmZ < hmHeight - 1) {
+                float heightLeft = heightmap[hmZ * hmWidth + (hmX - 1)] * TERRAIN_MAX_HEIGHT;
+                float heightRight = heightmap[hmZ * hmWidth + (hmX + 1)] * TERRAIN_MAX_HEIGHT;
+                float heightUp = heightmap[(hmZ - 1) * hmWidth + hmX] * TERRAIN_MAX_HEIGHT;
+                float heightDown = heightmap[(hmZ + 1) * hmWidth + hmX] * TERRAIN_MAX_HEIGHT;
+
+                glm::vec3 tangent(2.0f * hmToWorldX, heightRight - heightLeft, 0.0f);
+                glm::vec3 bitangent(0.0f, heightDown - heightUp, 2.0f * hmToWorldZ);
+
+                slopeNormal = glm::normalize(glm::cross(bitangent, tangent));
+
+                float slopeAngle = glm::degrees(
+                    glm::acos(glm::clamp(slopeNormal.y, -1.0f, 1.0f))
+                );
+                if (slopeAngle > MAX_SLOPE_DEG) {
+                    isSteep = true;
                 }
-                
-                if (!isSteep) {
-                    // Add some randomness to avoid grid pattern
-                    float randomOffsetX = ((float)rand() / RAND_MAX - 0.5f) * 0.8f;
-                    float randomOffsetZ = ((float)rand() / RAND_MAX - 0.5f) * 0.8f;
-                    
-                    GrassInstance instance;
-                    instance.offset = glm::vec3(x + randomOffsetX, height, z + randomOffsetZ);
-                    instances.push_back(instance);
-                }
+            }
+
+            if (!isSteep) {
+                // Add some randomness to avoid grid pattern
+                float randomOffsetX = ((float)rand() / RAND_MAX - 0.5f) * 0.8f;
+                float randomOffsetZ = ((float)rand() / RAND_MAX - 0.5f) * 0.8f;
+
+                GrassInstance instance;
+                instance.offset = glm::vec3(x + randomOffsetX, worldHeight, z + randomOffsetZ);
+                instance.normal = slopeNormal;
+                instances.push_back(instance);
             }
         }
     }

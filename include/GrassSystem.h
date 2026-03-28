@@ -18,7 +18,7 @@ private:
     
     struct GrassInstance {
         glm::vec3 offset;
-        float padding; // For alignment
+        glm::vec3 normal;
     };
     
     void generateGrassGeometry();
