@@ -2,9 +2,29 @@
 #include "Shader.h"
 #include <glad/glad.h>
 #include <glm/glm.hpp>
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
 
-ParticleSystem::ParticleSystem(int maxParticles) : maxParticles(maxParticles) {
+namespace {
+const float FOREST_MIN_HEIGHT = 8.0f;
+const float FOREST_MAX_HEIGHT = 85.0f;
+const int MAX_SPAWN_RETRIES = 32;
+const float BASE_HOVER = 8.0f;
+}
+
+ParticleSystem::ParticleSystem(int maxParticles,
+                                                             const std::vector<float>& heightmap,
+                                                             int hmWidth,
+                                                             int hmHeight,
+                                                             float terrainWidth,
+                                                             float terrainDepth)
+        : maxParticles(maxParticles),
+            terrainHeightmap(heightmap),
+            heightmapWidth(hmWidth),
+            heightmapHeight(hmHeight),
+            terrainWidth(terrainWidth),
+            terrainDepth(terrainDepth) {
     glGenVertexArrays(1, &particleVAO);
     glGenBuffers(1, &particleVBO);
 
@@ -24,6 +44,21 @@ ParticleSystem::~ParticleSystem() {
     glDeleteBuffers(1, &particleVBO);
 }
 
+float ParticleSystem::SampleTerrainHeight(float x, float z) const {
+    if (terrainHeightmap.empty() || heightmapWidth <= 1 || heightmapHeight <= 1) {
+        return 0.0f;
+    }
+
+    float nx = glm::clamp(x / terrainWidth, 0.0f, 1.0f);
+    float nz = glm::clamp(z / terrainDepth, 0.0f, 1.0f);
+
+    int ix = static_cast<int>(nx * (heightmapWidth - 1));
+    int iz = static_cast<int>(nz * (heightmapHeight - 1));
+
+    float h = terrainHeightmap[iz * heightmapWidth + ix];
+    return h * 150.0f;
+}
+
 void ParticleSystem::InitializeParticles() {
     particlePositions.clear();
     particleVelocities.clear();
@@ -32,11 +67,31 @@ void ParticleSystem::InitializeParticles() {
 
     srand(42);
     for (int i = 0; i < maxParticles; i++) {
-        glm::vec3 pos(
-            50.0f  + (rand() % 200) - 100.0f,  // x: spread around forest (0-200)
-            2.0f   + (rand() % 13),             // y: 2-15 units (near tree-top height)
-            100.0f + (rand() % 200) - 100.0f   // z: spread around forest (0-200)
-        );
+        float x = 0.0f;
+        float z = 0.0f;
+        float terrainY = 0.0f;
+
+        bool foundForestSpot = false;
+        for (int attempt = 0; attempt < MAX_SPAWN_RETRIES; ++attempt) {
+            x = static_cast<float>(rand()) / RAND_MAX * terrainWidth;
+            z = static_cast<float>(rand()) / RAND_MAX * terrainDepth;
+            terrainY = SampleTerrainHeight(x, z);
+
+            if (terrainY >= FOREST_MIN_HEIGHT && terrainY <= FOREST_MAX_HEIGHT) {
+                foundForestSpot = true;
+                break;
+            }
+        }
+
+        if (!foundForestSpot) {
+            x = static_cast<float>(rand()) / RAND_MAX * terrainWidth;
+            z = static_cast<float>(rand()) / RAND_MAX * terrainDepth;
+            terrainY = glm::clamp(SampleTerrainHeight(x, z), FOREST_MIN_HEIGHT, FOREST_MAX_HEIGHT);
+        }
+
+        float hover = 5.0f + static_cast<float>(rand() % 6); // 5..10 units above terrain
+
+        glm::vec3 pos(x, terrainY + hover, z);
         glm::vec3 vel(
             (rand() % 11 - 5) * 0.05f,  // vx: gentle drift
             0.0f,                        // vy: mostly horizontal
@@ -60,11 +115,38 @@ void ParticleSystem::Update(float deltaTime) {
     for (size_t i = 0; i < particlePositions.size(); i++) {
         particlePositions[i] += particleVelocities[i] * deltaTime;
 
-        // Gentle up/down bobbing using sin
-        particlePositions[i].y += 0.3f * std::sin(particlePositions[i].x * 0.7f + particlePositions[i].z * 0.5f) * 0.02f;
-        // Clamp altitude to realistic firefly range
-        if (particlePositions[i].y > 16.0f) particlePositions[i].y = 16.0f;
-        if (particlePositions[i].y < 1.5f)  particlePositions[i].y = 1.5f;
+        // Keep particles inside terrain footprint.
+        if (particlePositions[i].x < 0.0f) particlePositions[i].x += terrainWidth;
+        if (particlePositions[i].x > terrainWidth) particlePositions[i].x -= terrainWidth;
+        if (particlePositions[i].z < 0.0f) particlePositions[i].z += terrainDepth;
+        if (particlePositions[i].z > terrainDepth) particlePositions[i].z -= terrainDepth;
+
+        // Hover above local terrain with subtle flutter.
+        float terrainY = SampleTerrainHeight(particlePositions[i].x, particlePositions[i].z);
+
+        if (terrainY < FOREST_MIN_HEIGHT || terrainY > FOREST_MAX_HEIGHT) {
+            bool relocated = false;
+            for (int attempt = 0; attempt < MAX_SPAWN_RETRIES; ++attempt) {
+                float x = static_cast<float>(rand()) / RAND_MAX * terrainWidth;
+                float z = static_cast<float>(rand()) / RAND_MAX * terrainDepth;
+                float y = SampleTerrainHeight(x, z);
+
+                if (y >= FOREST_MIN_HEIGHT && y <= FOREST_MAX_HEIGHT) {
+                    particlePositions[i].x = x;
+                    particlePositions[i].z = z;
+                    particlePositions[i].y = y + BASE_HOVER;
+                    relocated = true;
+                    break;
+                }
+            }
+
+            if (!relocated) {
+                particlePositions[i].y = glm::clamp(terrainY, FOREST_MIN_HEIGHT, FOREST_MAX_HEIGHT) + BASE_HOVER;
+            }
+        } else {
+            float flutter = 0.8f * std::sin(0.35f * particlePositions[i].x + 0.27f * particlePositions[i].z);
+            particlePositions[i].y = terrainY + BASE_HOVER + flutter;
+        }
 
         // Add slight jitter to velocity for fluttering effect
         particleVelocities[i].x += (rand() % 11 - 5) * 0.001f;

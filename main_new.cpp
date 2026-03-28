@@ -20,13 +20,11 @@
 #include "NoiseMap.h"
 #include "TreeSystem.h"
 #include "BuildingSystem.h"
-#include "NPCSystem.h"
 #include "ParticleSystem.h"
 #include "WaterSystem.h"
 #include "GrassSystem.h"
 #include "LightingSystem.h"
 #include "RainSystem.h"
-#include "ColonySystem.h"
 
 // ---- Window dimensions ----
 const unsigned int SCR_WIDTH  = 1280;
@@ -230,9 +228,7 @@ int main() {
     TreeSystem    treeSystem(noiseData, HM_W, HM_H, 800, 800);
     GrassSystem   grassSystem(noiseData, HM_W, HM_H, 800, 800);
     BuildingSystem buildingSystem;
-    NPCSystem     npcSystem;
-    ColonySystem  colonySystem(noiseData, HM_W, HM_H, 800, 800);
-    ParticleSystem particleSystem(500);
+    ParticleSystem particleSystem(500, noiseData, HM_W, HM_H, 800.0f, 800.0f);
     WaterSystem   waterSystem(2000, 2000);
     LightingSystem lightingSystem;
     RainSystem    rainSystem(5000);
@@ -243,7 +239,6 @@ int main() {
     Shader treeShader    ("assets/shaders/tree.vert",     "assets/shaders/tree.frag");
     Shader grassShader   ("assets/shaders/grass.vert",    "assets/shaders/grass.frag");
     Shader buildingShader("assets/shaders/building.vert", "assets/shaders/building.frag");
-    Shader personShader  ("assets/shaders/person.vert",   "assets/shaders/person.frag");
     Shader particleShader("assets/shaders/particle.vert", "assets/shaders/particle.frag");
     Shader waterShader   ("assets/shaders/water.vert",    "assets/shaders/water.frag");
     Shader skyboxShader  ("assets/shaders/skybox.vert",   "assets/shaders/skybox.frag");
@@ -272,8 +267,6 @@ int main() {
         float windStrength = 0.5f + 0.5f * std::sin(currentFrame * 0.15f);
 
         // Update moving systems
-        npcSystem.Update(currentFrame);
-        colonySystem.Update(currentFrame);
         particleSystem.Update(deltaTime);
         rainSystem.Update(deltaTime, camera.Position);
 
@@ -312,8 +305,6 @@ int main() {
         // Draw buildings to depth map
         buildingSystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader);
 
-        // Draw huts to depth map
-        colonySystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader, depthShader, currentFrame);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -346,7 +337,6 @@ int main() {
         setSceneUniforms(treeShader);
         setSceneUniforms(grassShader);
         setSceneUniforms(buildingShader);
-        setSceneUniforms(personShader);
         setSceneUniforms(waterShader);
 
         // --- Draw Terrain (with shadows) ---
@@ -382,11 +372,6 @@ int main() {
         // --- Draw Buildings ---
         buildingSystem.Render(projection, view, skyColor, buildingShader);
 
-        // --- Draw Colony (huts and villagers) ---
-        colonySystem.Render(projection, view, skyColor, buildingShader, personShader, currentFrame);
-
-        // --- Draw NPCs ---
-        npcSystem.Render(projection, view, skyColor, personShader, currentFrame);
 
         // --- Draw Water ---
         waterShader.use();

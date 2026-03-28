@@ -13,7 +13,12 @@ struct Particle {
 
 class ParticleSystem {
 public:
-    ParticleSystem(int maxParticles = 500);
+    ParticleSystem(int maxParticles = 500,
+                   const std::vector<float>& heightmap = {},
+                   int hmWidth = 0,
+                   int hmHeight = 0,
+                   float terrainWidth = 800.0f,
+                   float terrainDepth = 800.0f);
     ~ParticleSystem();
 
     void Update(float deltaTime);
@@ -26,7 +31,13 @@ private:
     std::vector<glm::vec3> particlePositions;
     std::vector<glm::vec3> particleVelocities;
     int maxParticles;
+    std::vector<float> terrainHeightmap;
+    int heightmapWidth;
+    int heightmapHeight;
+    float terrainWidth;
+    float terrainDepth;
 
     void InitializeParticles();
+    float SampleTerrainHeight(float x, float z) const;
     void UpdateGPU();
 };
