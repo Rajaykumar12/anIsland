@@ -13,11 +13,11 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 - Renders with Phong lighting and dynamic sky color
 
 #### 2. **GrassSystem** (`include/GrassSystem.h`, `src/GrassSystem.cpp`)
-- Generates thousands of grass blade instances across flat terrain
-- Procedurally places grass on slopes < 15° and heights < 35 units
-- Each blade is a simple quad (2 triangles) with wind animation
+- Generates dense grass blade instances across mountain terrain
+- Places grass in terrain world coordinates and aligns each blade to local terrain normal
+- Filters out underwater and extreme-slope areas; supports higher elevations on mountains
+- Each blade is a simple quad (2 triangles) rendered as static foliage
 - Uses efficient instanced rendering (single draw call)
-- Wind effect adds swaying motion to all blades simultaneously
 - Includes randomized positioning to avoid grid artifacts
 
 #### 3. **BuildingSystem** (`include/BuildingSystem.h`, `src/BuildingSystem.cpp`)
@@ -26,24 +26,28 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 - All geometry stored as triangles for GL_TRIANGLES rendering
 - Instanced rendering for efficient batch processing
 
-#### 4. **NPCSystem** (`include/NPCSystem.h`, `src/NPCSystem.cpp`)
-- Spawns 30 NPCs with walking animations
-- Each NPC modeled as head + body + arms + legs
-- Positioned randomly within the town coordinates
-- Uses time-based shader animation for walking motion
+#### 4. **RainSystem** (`include/RainSystem.h`, `src/RainSystem.cpp`)
+- Simulates large rain particle fields over the terrain
+- Toggleable in runtime (R key)
+- Integrates with camera-centered updates for coverage
 
 #### 5. **ParticleSystem** (`include/ParticleSystem.h`, `src/ParticleSystem.cpp`)
 - Manages 500 firefly particles with physics simulation
-- Updates positions each frame with velocity-based movement
-- Adds fluttering effect with random jitter
+- Samples terrain heightmap so fireflies stay above the terrain surface
+- Constrains spawn and relocation to forest elevation bands (tree habitat range)
+- Adds fluttering effect with random jitter while preserving above-ground placement
 - Renders as GL_POINTS with additive blending for glow effect
 
 #### 6. **WaterSystem** (`include/WaterSystem.h`, `src/WaterSystem.cpp`)
 - Generates 500x500 grid water mesh
 - Covers ±500 units around terrain center
-- Water positioned at Y = -10 to fill natural valleys
+- Water tuned near shoreline level for beach contact (current level near Y = -1.5)
 - Uses procedural sine wave displacement for wave simulation
 - Implements height-based color blending (deep blue to shallow cyan)
+
+#### 8. **Legacy Systems (Disabled in active main loop)**
+- **NPCSystem** (`include/NPCSystem.h`, `src/NPCSystem.cpp`) is present in the codebase but not instantiated/rendered in `main_new.cpp`
+- **ColonySystem** (`include/ColonySystem.h`, `src/ColonySystem.cpp`) is present in the codebase but not instantiated/rendered in `main_new.cpp`
 
 #### 7. **LightingSystem** (`include/LightingSystem.h`, `src/LightingSystem.cpp`)
 - Implements day/night cycle with sun orbit
@@ -80,10 +84,10 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 ```
 assets/shaders/
 ├── terrain.vert/frag    - Heightmap-based terrain with Phong lighting, shadow mapping, fog
-├── grass.vert/frag      - Instanced grass blades with wind animation, fog
+├── grass.vert/frag      - Instanced static grass aligned to terrain slope, fog
 ├── tree.vert/frag       - Instanced tree rendering with fog
 ├── building.vert/frag   - Instanced building rendering with fog
-├── person.vert/frag     - NPCs with walking animation, fog
+├── person.vert/frag     - Legacy NPC shader (system currently disabled in main_new.cpp)
 ├── particle.vert/frag   - GL_POINTS firefly rendering with glow
 ├── water.vert/frag      - Procedural sine wave water with light response, fog
 ├── depth.vert/frag      - Shadow mapping depth pass (light space rendering)
@@ -148,6 +152,7 @@ make
 - **Mouse** - Look around (captured)
 - **ESC** - Exit
 - **F** - Toggle wireframe mode
+- **R** - Toggle rain
 
 ### Key Features
 
@@ -157,8 +162,8 @@ make
 ✅ **Sunset Glow** - Orange/red atmospheric glow when sun is near horizon
 ✅ **Day/Night Cycle** - Sun orbits every ~63 seconds, all lighting changes dynamically
 ✅ **Firefly Particles** - 500 glowing particles with physics-based movement
-✅ **Dynamic Water** - Procedural sine waves fill terrain valleys, island surrounded by ocean
-✅ **Terrain Instancing** - 15,000 trees, 16 buildings, 30 NPCs rendered efficiently
+✅ **Dynamic Water + Shoreline** - Procedural waves with irregular coast and beach transition
+✅ **Terrain Instancing** - 15,000 trees, 16 buildings, and dense mountain grass rendered efficiently
 ✅ **Two-Pass Rendering** - Depth pass (light space) + Color pass (camera space with shadows)
 
 ### Rendering Pipeline
@@ -214,7 +219,7 @@ The modern rendering pipeline uses a **two-pass approach**:
 
 - **Tree Count**: 15,000 (instanced, 1 draw call)
 - **Building Count**: 16 (instanced, 1 draw call)
-- **NPC Count**: 30 (instanced, 1 draw call)
+- **NPC Count**: Disabled in active `main_new.cpp` pipeline
 - **Terrain Resolution**: 800x800 vertices
 - **Particle Count**: 500 (updated each frame)
 - **Water Grid**: 500x500 triangles (100k + polygons)
@@ -235,7 +240,7 @@ To add new systems:
 - **Fog Density**: 0.0002-0.0005 (varies by shader - terrain/grass/water/etc.)
 - **Fog Formula**: Exponential squared ($visibility = e^{-(distance \cdot density)^2}$)
 - **Day Speed**: 0.1f (LightingSystem.cpp) - lower = longer days
-- **Water Level**: -10.0f (WaterSystem)
+- **Water Level**: ~-1.5f (WaterSystem)
 - **Particle Count**: 500 (main_new.cpp, ParticleSystem)
 - **Sun Radius**: 100.0f (LightingSystem.cpp)
 - **Shadow Map Resolution**: 2048×2048 (LightingSystem.cpp)

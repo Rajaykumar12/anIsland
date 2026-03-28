@@ -1,6 +1,6 @@
 # OpenGL Terrain Visualization
 
-A modern C++ OpenGL application featuring a procedurally generated terrain with dynamic lighting, advanced visual effects, and a modular system architecture. Includes day/night cycles, shadow mapping, volumetric fog, firefly particles, NPCs, and various interactive environmental elements.
+A modern C++ OpenGL application featuring a procedurally generated terrain with dynamic lighting, advanced visual effects, and a modular system architecture. Includes day/night cycles, shadow mapping, volumetric fog, forest-confined firefly particles, and interactive environmental elements.
 
 ## Features
 
@@ -13,11 +13,10 @@ A modern C++ OpenGL application featuring a procedurally generated terrain with 
 
 ### Simulation Systems
 - **15,000 Instanced Trees** - Intelligent placement based on terrain height/slope with Phong lighting
-- **Procedural Grass** - Thousands of wind-animated grass blades on flat terrain
-- **Dynamic Water** - 500×500 grid with procedural sine wave displacement filling valleys
+- **Procedural Grass** - Dense static grass aligned to mountain slopes with terrain-normal orientation
+- **Dynamic Water + Coastline** - Procedural wave surface with irregular island shoreline and beach transition
 - **Town Grid** - 4×4 building blocks with illuminated windows in the terrain center
-- **30 Animated NPCs** - Walking characters with skeletal animation
-- **Firefly Particles** - 500 glowing particles with physics-based movement and additive blending
+- **Firefly Particles** - 500 glowing particles anchored above terrain and confined to forest elevation bands
 
 ### Lighting & Atmosphere
 - **Day/Night Cycle** - Sun orbits every ~63 seconds with dynamic color interpolation
@@ -112,23 +111,20 @@ CGAssignment/
 │   ├── Shader.h               # OpenGL shader utility
 │   ├── NoiseMap.h             # Perlin noise generation
 │   ├── TreeSystem.h           # 15,000 instanced trees (NEW)
-│   ├── GrassSystem.h          # Procedural grass (NEW)
+│   ├── GrassSystem.h          # Static slope-aligned mountain grass (NEW)
 │   ├── BuildingSystem.h       # Town buildings (NEW)
-│   ├── NPCSystem.h            # Walking NPCs (NEW)
 │   ├── ParticleSystem.h       # Firefly particles (NEW)
 │   ├── WaterSystem.h          # Dynamic water (NEW)
 │   ├── LightingSystem.h       # Day/night cycle & shadows (NEW)
 │   ├── RainSystem.h           # Rain simulation (NEW)
-│   ├── ColonySystem.h         # Ant colony simulation (NEW)
 │   └── glad/glad.h            # OpenGL headers
 ├── src/
 │   ├── [Corresponding .cpp implementations]
 ├── assets/shaders/
 │   ├── terrain.vert/.frag     # Terrain rendering with shadows
-│   ├── grass.vert/.frag       # Wind-animated grass
+│   ├── grass.vert/.frag       # Static slope-aligned grass
 │   ├── tree.vert/.frag        # Instanced tree rendering
 │   ├── building.vert/.frag    # Building rendering
-│   ├── person.vert/.frag      # NPC animation
 │   ├── particle.vert/.frag    # Firefly rendering
 │   ├── water.vert/.frag       # Procedural water
 │   ├── depth.vert/.frag       # Shadow map generation
@@ -147,12 +143,10 @@ This project uses a **modular system-based architecture** for maintainability an
 - **Lighting System** - Manages day/night cycle, shadow mapping, and fog parameters
 - **Tree System** - Renders 15,000 trees with intelligent placement
 - **Building System** - Creates town-center buildings in 4×4 grid
-- **NPC System** - Animates 30 walking characters
-- **Particle System** - Manages 500 firefly particles
-- **Grass System** - Generates wind-animated grass across terrain
+- **Particle System** - Manages 500 forest-band firefly particles above terrain
+- **Grass System** - Generates dense, static, slope-aligned grass across mountain surfaces
 - **Water System** - Creates dynamic water surface with wave displacement
 - **Rain System** - Rain particle simulation
-- **Colony System** - Ant colony AI simulation
 
 ### Rendering Pipeline
 
@@ -182,7 +176,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation of all systems
 
 ## Performance Considerations
 
-- **Instancing** - Trees, buildings, and NPCs rendered efficiently in batches
+- **Instancing** - Trees, buildings, and grass rendered efficiently in batches
 - **Frustum Culling** - Optional optimization for large object counts
 - **Level of Detail** - Terrain LOD can be adjusted via grid resolution
 - **Shadow Type** - Directional shadows optimized for landscape rendering
@@ -191,7 +185,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation of all systems
 
 - **Shader Assets** - Located in `assets/shaders/`, automatically copied to build directory
 - **Camera Position** - Default spawn: (125, 200, 175) above town center
-- **Terrain Size** - 800×800 vertices spanning ~1600 units²
+- **Terrain Size** - 800×800 vertices spanning 800×800 world units
 - **Day Speed** - One full day/night cycle ≈ 63 seconds
 
 ## Troubleshooting
