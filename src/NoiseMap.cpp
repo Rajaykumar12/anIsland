@@ -4,6 +4,13 @@
 #include <algorithm>
 #include <random>
 
+namespace {
+float smoothstep(float edge0, float edge1, float x) {
+    float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+    return t * t * (3.0f - 2.0f * t);
+}
+} // namespace
+
 int NoiseMap::perm[512] = {};
 
 std::vector<float> NoiseMap::generate(int width, int height,
@@ -38,7 +45,30 @@ std::vector<float> NoiseMap::generate(int width, int height,
             }
 
             // Normalize to [0, 1]
-            map[y * width + x] = (noiseValue / maxPossible) * 0.5f + 0.5f;
+            float normalized = (noiseValue / maxPossible) * 0.5f + 0.5f;
+
+            // Radial base for island shape
+            float cx = (width - 1) * 0.5f;
+            float cy = (height - 1) * 0.5f;
+            float dx = (x - cx) / cx;
+            float dy = (y - cy) / cy;
+            float dist = std::sqrt(dx * dx + dy * dy);
+
+            // Layered coast noise for irregular, natural shoreline shape
+            float coastMacro  = perlin(x * 0.012f + 37.2f, y * 0.012f - 11.4f);
+            float coastDetail = perlin(x * 0.045f - 53.1f, y * 0.045f + 8.7f);
+            float jitter = coastMacro * 0.10f + coastDetail * 0.035f;
+
+            float shoreStart = 0.58f + jitter;
+            float shoreEnd   = 0.97f + jitter;
+            float falloff = 1.0f - smoothstep(shoreStart, shoreEnd, dist);
+
+            // Push outer ring underwater so terrain border is hidden by ocean
+            float edgeSubmerge = smoothstep(0.55f, 0.95f, dist);
+            float heightValue = normalized * falloff - 0.09f * edgeSubmerge;
+
+            // Preserve tall inland terrain while allowing shallow underwater edge
+            map[y * width + x] = std::clamp(heightValue, -0.15f, 1.0f);
         }
     }
     return map;

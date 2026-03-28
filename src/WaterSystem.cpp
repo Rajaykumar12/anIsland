@@ -37,7 +37,7 @@ void WaterSystem::GenerateMesh(int width, int depth) {
 
     float waterSpacing = 2.0f;  // Keep coarser for performance
     const float WATER_EXTENT = 2000.0f;  // 5x larger ocean area
-    const float WATER_LEVEL = -15.0f;  // Deeper, below island
+    const float WATER_LEVEL = -1.5f;  // Better shoreline contact after edge submerge
     
     for (int z = 0; z < depth; z++) {
         for (int x = 0; x < width; x++) {

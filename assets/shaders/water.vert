@@ -25,7 +25,7 @@ void main()
     // Wave 3: Medium ripples along Z
     float wave3 = 0.15 * sin(pos.z * 1.5  - u_Time * 2.0);
 
-    pos.y = wave1 + wave2 + wave3;
+    pos.y = pos.y + wave1 + wave2 + wave3;
     Height = pos.y;
 
     // Approximate surface normal from wave gradients

@@ -43,6 +43,7 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lDir)
 void main()
 {
     // Define vibrant terrain colors based on height
+    vec3 sandColor  = vec3(0.76, 0.70, 0.50);      // Warm sand near shoreline
     vec3 grassColor = vec3(0.25, 0.65, 0.15);      // Vibrant bright green
     vec3 dirtColor  = vec3(0.55, 0.42, 0.25);      // Warm brown
     vec3 rockColor  = vec3(0.5, 0.48, 0.45);       // Warm dark gray
@@ -51,10 +52,13 @@ void main()
     vec3 terrainColor;
 
     // Smooth blending between bands with adjusted thresholds
-    if (Height < 25.0) {
-        terrainColor = grassColor;
+    if (Height < 20.0) {
+        terrainColor = sandColor;
+    } else if (Height < 35.0) {
+        float t = smoothstep(20.0, 35.0, Height);
+        terrainColor = mix(sandColor, grassColor, t);
     } else if (Height < 50.0) {
-        float t = smoothstep(25.0, 50.0, Height);
+        float t = smoothstep(35.0, 50.0, Height);
         terrainColor = mix(grassColor, dirtColor, t);
     } else if (Height < 85.0) {
         float t = smoothstep(50.0, 85.0, Height);
