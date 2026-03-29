@@ -14,6 +14,7 @@ public:
     void setVec3(const std::string& name, const glm::vec3& value) const;
     void setInt(const std::string& name, int val) const;
     void setFloat(const std::string& name, float val) const;
+    void setBool(const std::string& name, bool val) const;
 
 private:
     void checkCompileErrors(unsigned int shader, const std::string& type);

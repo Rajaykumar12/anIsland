@@ -17,6 +17,10 @@ public:
     float     GetSunIntensity()  const { return lightIntensity; }
     float     GetTimeOfDay()     const { return timeOfDay; }
     float     GetDayIntensity()  const { return dayIntensity; }
+
+    void SetManualTimeOfDay(float normalizedTime);
+    void ClearManualTimeOverride();
+    bool IsManualTimeEnabled() const { return useManualTime; }
     
     // Shadow mapping getters
     unsigned int GetDepthMapFBO()     const { return depthMapFBO; }
@@ -34,6 +38,8 @@ private:
     float lightIntensity;
     float timeOfDay;
     float dayIntensity;  // 0=night, 1=full day
+    bool useManualTime;
+    float manualTimeOfDay;
 
     float daySpeed;
     float sunRadius;
