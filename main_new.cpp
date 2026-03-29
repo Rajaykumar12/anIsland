@@ -1,6 +1,6 @@
 // ============================================================
 // OpenGL Terrain Visualization - Modular Architecture
-// Systems: Terrain, Trees, Buildings, NPCs, Particles, Water, Lighting, Grass, Rain
+// Systems: Terrain, Trees, Particles, Water, Lighting, Grass, Rain
 // ============================================================
 
 #include <glad/glad.h>
@@ -19,17 +19,19 @@
 #include "Camera.h"
 #include "NoiseMap.h"
 #include "TreeSystem.h"
-#include "BuildingSystem.h"
 #include "ParticleSystem.h"
 #include "WaterSystem.h"
 #include "GrassSystem.h"
 #include "LightingSystem.h"
 #include "RainSystem.h"
 #include "SplashSystem.h"
+#include "NPCSystem.h"
+#include "CinematicSystem.h"
 
 // ---- Window dimensions ----
 const unsigned int SCR_WIDTH  = 1280;
 const unsigned int SCR_HEIGHT = 720;
+const float CINEMATIC_ACT_STARTS[] = {0.0f, 35.0f, 75.0f, 115.0f, 150.0f, 215.0f, 250.0f, 300.0f};
 
 // ---- Global camera (used in callbacks) ----
 Camera camera(glm::vec3(125.0f, 200.0f, 175.0f));
@@ -41,14 +43,22 @@ bool  firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// -------------------------------------------------------
-// GLFW Callbacks
-// -------------------------------------------------------
+// ---- Forward references ----
+RainSystem* g_rainSystem = nullptr;
+bool g_rainEnabled = false;
+CinematicSystem* g_cinematicSystem = nullptr;
+bool g_cinematicMode = true;
+
+// ---- GLFW Callbacks ----
 void framebuffer_size_callback(GLFWwindow* /*win*/, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
 void mouse_callback(GLFWwindow* /*win*/, double xposIn, double yposIn) {
+    if (g_cinematicMode) {
+        return;
+    }
+
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
 
@@ -67,23 +77,90 @@ void mouse_callback(GLFWwindow* /*win*/, double xposIn, double yposIn) {
 }
 
 void scroll_callback(GLFWwindow* /*win*/, double /*xoffset*/, double yoffset) {
+    if (g_cinematicMode) {
+        return;
+    }
+
     camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
-
-// Rain system forward reference for key callback
-RainSystem* g_rainSystem = nullptr;
-bool g_rainEnabled = false;
 
 void processInput(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.ProcessKeyboard(FORWARD,  deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.ProcessKeyboard(LEFT,     deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.ProcessKeyboard(RIGHT,    deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) camera.ProcessKeyboard(UP,       deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) camera.ProcessKeyboard(DOWN,     deltaTime);
+    static bool cWasDown = false;
+    bool cIsDown = glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS;
+    if (cIsDown && !cWasDown) {
+        g_cinematicMode = !g_cinematicMode;
+        firstMouse = true;
+    }
+    cWasDown = cIsDown;
+
+    if (!g_cinematicMode) {
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.ProcessKeyboard(FORWARD,  deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.ProcessKeyboard(BACKWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.ProcessKeyboard(LEFT,     deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.ProcessKeyboard(RIGHT,    deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) camera.ProcessKeyboard(UP,       deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) camera.ProcessKeyboard(DOWN,     deltaTime);
+    }
+
+    static bool pWasDown = false;
+    bool pIsDown = glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS;
+    if (pIsDown && !pWasDown && g_cinematicSystem) {
+        g_cinematicSystem->TogglePlayPause();
+    }
+    pWasDown = pIsDown;
+
+    static bool lWasDown = false;
+    bool lIsDown = glfwGetKey(window, GLFW_KEY_LEFT_BRACKET) == GLFW_PRESS;
+    if (lIsDown && !lWasDown && g_cinematicSystem) {
+        g_cinematicSystem->Seek(-10.0f);
+    }
+    lWasDown = lIsDown;
+
+    static bool rbWasDown = false;
+    bool rbIsDown = glfwGetKey(window, GLFW_KEY_RIGHT_BRACKET) == GLFW_PRESS;
+    if (rbIsDown && !rbWasDown && g_cinematicSystem) {
+        g_cinematicSystem->Seek(10.0f);
+    }
+    rbWasDown = rbIsDown;
+
+    static bool bWasDown = false;
+    bool bIsDown = glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS;
+    if (bIsDown && !bWasDown && g_cinematicSystem) {
+        g_cinematicSystem->Reset();
+    }
+    bWasDown = bIsDown;
+
+    static bool commaWasDown = false;
+    bool commaIsDown = glfwGetKey(window, GLFW_KEY_COMMA) == GLFW_PRESS;
+    if (commaIsDown && !commaWasDown && g_cinematicSystem) {
+        float current = g_cinematicSystem->GetCurrentTime();
+        float target = 0.0f;
+        for (float t : CINEMATIC_ACT_STARTS) {
+            if (t < current - 0.5f) {
+                target = t;
+            }
+        }
+        g_cinematicSystem->Seek(target - current);
+    }
+    commaWasDown = commaIsDown;
+
+    static bool periodWasDown = false;
+    bool periodIsDown = glfwGetKey(window, GLFW_KEY_PERIOD) == GLFW_PRESS;
+    if (periodIsDown && !periodWasDown && g_cinematicSystem) {
+        float current = g_cinematicSystem->GetCurrentTime();
+        float target = 300.0f;
+        for (float t : CINEMATIC_ACT_STARTS) {
+            if (t > current + 0.5f) {
+                target = t;
+                break;
+            }
+        }
+        g_cinematicSystem->Seek(target - current);
+    }
+    periodWasDown = periodIsDown;
 
     // Toggle wireframe with F
     static bool wireframe = false;
@@ -176,8 +253,31 @@ unsigned int createSkyboxCube() {
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    
+
     return skyboxVAO;
+}
+
+unsigned int createFullscreenQuad() {
+    float quadVertices[] = {
+        -1.0f, -1.0f,
+         1.0f, -1.0f,
+         1.0f,  1.0f,
+        -1.0f, -1.0f,
+         1.0f,  1.0f,
+        -1.0f,  1.0f
+    };
+
+    unsigned int quadVAO, quadVBO;
+    glGenVertexArrays(1, &quadVAO);
+    glGenBuffers(1, &quadVBO);
+    glBindVertexArray(quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glBindVertexArray(0);
+
+    return quadVAO;
 }
 
 // -------------------------------------------------------
@@ -195,7 +295,7 @@ int main() {
 #endif
 
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT,
-                                          "Terrain Visualization", nullptr, nullptr);
+                                          "The Island Remembers", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window\n";
         glfwTerminate();
@@ -211,9 +311,9 @@ int main() {
 
     // Register callbacks
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    glfwSetCursorPosCallback(window,       mouse_callback);
-    glfwSetScrollCallback(window,          scroll_callback);
-    glfwSetInputMode(window, GLFW_CURSOR,  GLFW_CURSOR_DISABLED);
+    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetScrollCallback(window, scroll_callback);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     // ---- OpenGL state ----
     glEnable(GL_DEPTH_TEST);
@@ -230,25 +330,47 @@ int main() {
     Terrain       terrain(800, 800);
     TreeSystem    treeSystem(noiseData, HM_W, HM_H, 800, 800);
     GrassSystem   grassSystem(noiseData, HM_W, HM_H, 800, 800);
-    BuildingSystem buildingSystem;
     ParticleSystem particleSystem(500, noiseData, HM_W, HM_H, 800.0f, 800.0f);
     WaterSystem   waterSystem(2000, 2000);
     LightingSystem lightingSystem;
     RainSystem    rainSystem(5000);
     SplashSystem  splashSystem(200, noiseData, HM_W, HM_H, 800.0f, 800.0f);
+    NPCSystem     npcSystem;
+    CinematicSystem cinematicSystem;
+
+    // Static anchor NPCs; visibility windows are expanded in later phases.
+    npcSystem.AddCinematicNPC(
+        glm::vec3(115.0f, 0.5f, -5.0f),
+        glm::vec3(-90.0f, 180.0f, 0.0f),
+        NPCPoseType::PRONE,
+        35.0f, 150.0f);
+    npcSystem.AddCinematicNPC(
+        glm::vec3(125.0f, 5.0f, 125.0f),
+        glm::vec3(0.0f, 315.0f, 0.0f),
+        NPCPoseType::SITTING,
+        150.0f, 250.0f);
+    npcSystem.AddCinematicNPC(
+        glm::vec3(62.0f, 78.0f, 68.0f),
+        glm::vec3(0.0f, 225.0f, 0.0f),
+        NPCPoseType::STANDING,
+        250.0f, 301.0f);
+
+    // Store globals for callbacks
     g_rainSystem = &rainSystem;
+    g_cinematicSystem = &cinematicSystem;
 
     // ---- 5. Load Shaders ----
     Shader terrainShader ("assets/shaders/terrain.vert",  "assets/shaders/terrain.frag");
     Shader treeShader    ("assets/shaders/tree.vert",     "assets/shaders/tree.frag");
     Shader grassShader   ("assets/shaders/grass.vert",    "assets/shaders/grass.frag");
-    Shader buildingShader("assets/shaders/building.vert", "assets/shaders/building.frag");
     Shader particleShader("assets/shaders/particle.vert", "assets/shaders/particle.frag");
     Shader waterShader   ("assets/shaders/water.vert",    "assets/shaders/water.frag");
     Shader skyboxShader  ("assets/shaders/skybox.vert",   "assets/shaders/skybox.frag");
     Shader rainShader    ("assets/shaders/rain.vert",     "assets/shaders/rain.frag");
     Shader splashShader  ("assets/shaders/splash.vert",   "assets/shaders/splash.frag");
     Shader depthShader   ("assets/shaders/depth.vert",    "assets/shaders/depth.frag");
+    Shader personShader  ("assets/shaders/person.vert",   "assets/shaders/person.frag");
+    Shader fadeShader    ("assets/shaders/fade.vert",     "assets/shaders/fade.frag");
 
     // Tell terrain shader which texture unit holds the heightmap
     terrainShader.use();
@@ -256,6 +378,15 @@ int main() {
 
     // Create skybox VAO
     unsigned int skyboxVAO = createSkyboxCube();
+    unsigned int fadeQuadVAO = createFullscreenQuad();
+
+    std::cout << "=== THE ISLAND REMEMBERS ===" << std::endl;
+    std::cout << "Press C to toggle cinematic mode" << std::endl;
+    std::cout << "Press P to play/pause cinematic" << std::endl;
+    std::cout << "Press [ and ] to seek timeline" << std::endl;
+    std::cout << "Press , and . to jump between act boundaries" << std::endl;
+    std::cout << "Press B to restart timeline" << std::endl;
+    std::cout << "Press ESC to exit" << std::endl;
 
     // ---- 6. Render Loop ----
     while (!glfwWindowShouldClose(window)) {
@@ -265,18 +396,44 @@ int main() {
 
         processInput(window);
 
+        if (g_cinematicMode) {
+            cinematicSystem.Update(deltaTime);
+
+            camera.Position = cinematicSystem.GetCameraPosition();
+            glm::vec3 viewDir = cinematicSystem.GetCameraTarget() - camera.Position;
+            float viewDirLen = glm::length(viewDir);
+            if (viewDirLen > 0.0001f) {
+                camera.Front = viewDir / viewDirLen;
+
+                glm::vec3 upReference = camera.WorldUp;
+                if (std::abs(glm::dot(camera.Front, upReference)) > 0.98f) {
+                    upReference = glm::vec3(0.0f, 0.0f, 1.0f);
+                }
+
+                camera.Right = glm::normalize(glm::cross(camera.Front, upReference));
+                camera.Up = glm::normalize(glm::cross(camera.Right, camera.Front));
+            }
+
+            lightingSystem.SetManualTimeOfDay(cinematicSystem.GetForcedTimeOfDay());
+        } else {
+            lightingSystem.ClearManualTimeOverride();
+        }
+
         // Update lighting/day-night cycle
         lightingSystem.Update(currentFrame);
 
-        // Compute dynamic wind strength (slow sine, 0->1)
+        float sceneTime = g_cinematicMode ? cinematicSystem.GetCurrentTime() : currentFrame;
+
+        // Compute dynamic wind strength
         float windStrength = 0.5f + 0.5f * std::sin(currentFrame * 0.15f);
 
         // Update moving systems
         particleSystem.Update(deltaTime);
         rainSystem.Update(deltaTime, camera.Position);
         splashSystem.Update(deltaTime, g_rainEnabled, camera.Position);
+        npcSystem.Update(sceneTime);
 
-        // Retrieve lighting values once per frame
+        // Retrieve lighting values
         glm::vec3 lightDir    = lightingSystem.GetLightDir();
         glm::vec3 lightColor  = lightingSystem.GetSunColor() * lightingSystem.GetSunIntensity();
         glm::vec3 sunsetTint  = lightingSystem.GetSunsetTint();
@@ -289,7 +446,6 @@ int main() {
 
         // ============================================================
         // PASS 1: DEPTH PASS - Render from light's perspective
-        // (now includes trees, buildings for proper shadows)
         // ============================================================
         glm::mat4 lightProj = lightingSystem.GetLightProjection();
         glm::mat4 lightView = lightingSystem.GetLightView();
@@ -302,17 +458,10 @@ int main() {
         depthShader.setMat4("lightSpaceMatrix", lightingSystem.GetLightSpaceMatrix());
         depthShader.setMat4("model", glm::mat4(1.0f));
 
-        // Draw terrain to depth map
         terrain.Draw();
-
-        // Draw trees to depth map – they now cast shadows on the terrain!
         treeSystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader);
 
-        // Draw buildings to depth map
-        buildingSystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader);
-
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 
         // ============================================================
         // PASS 2: COLOR PASS - Render from camera's perspective
@@ -324,7 +473,8 @@ int main() {
 
         // Calculate matrices
         float aspect = (currentHeight == 0) ? 1.0f : (float)currentWidth / (float)currentHeight;
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), aspect, 0.1f, 2000.0f);
+        float fov = g_cinematicMode ? cinematicSystem.GetCurrentFOV() : camera.Zoom;
+        glm::mat4 projection = glm::perspective(glm::radians(fov), aspect, 0.1f, 2000.0f);
         glm::mat4 view  = camera.GetViewMatrix();
         glm::mat4 model = glm::mat4(1.0f);
 
@@ -341,8 +491,8 @@ int main() {
         setSceneUniforms(terrainShader);
         setSceneUniforms(treeShader);
         setSceneUniforms(grassShader);
-        setSceneUniforms(buildingShader);
         setSceneUniforms(waterShader);
+        setSceneUniforms(personShader);
 
         // --- Draw Terrain (with shadows) ---
         terrainShader.use();
@@ -364,19 +514,15 @@ int main() {
         grassShader.use();
         grassShader.setMat4 ("projection",   projection);
         grassShader.setMat4 ("view",         view);
-        grassShader.setFloat("u_Time",       currentFrame);
+        grassShader.setFloat("u_Time",       sceneTime);
         grassShader.setFloat("windStrength", windStrength);
         grassSystem.Draw();
 
-        // --- Draw Trees (with canopy sway) ---
+        // --- Draw Trees ---
         treeShader.use();
-        treeShader.setFloat("u_Time",       currentFrame);
+        treeShader.setFloat("u_Time",       sceneTime);
         treeShader.setFloat("windStrength", windStrength);
         treeSystem.Render(projection, view, skyColor, treeShader);
-
-        // --- Draw Buildings ---
-        buildingSystem.Render(projection, view, skyColor, buildingShader);
-
 
         // --- Draw Water ---
         waterShader.use();
@@ -385,24 +531,27 @@ int main() {
         waterShader.setVec3("sunsetTint", sunsetTint);
         waterShader.setVec3("cameraPos",  camera.Position);
         waterShader.setVec3("skyColor",   skyColor);
-        waterSystem.Render(projection, view, waterShader, currentFrame,
+        waterSystem.Render(projection, view, waterShader, sceneTime,
                            lightingSystem.GetSunColor() * lightingSystem.GetSunIntensity());
 
-        // --- Draw Firefly Particles (only at night) ---
+        // --- Draw Firefly Particles ---
         particleShader.use();
         particleShader.setFloat("dayIntensity", dayIntensity);
         particleSystem.Render(projection, view, particleShader);
 
-        // --- Draw Rain (if enabled, toggle with R) ---
+        // --- Draw Rain ---
         rainSystem.Render(projection, view, rainShader);
 
         // --- Draw Rain Splashes ---
         splashSystem.Render(projection, view, splashShader);
 
-        // === Draw Skybox (last, with special depth handling) ===
+        // --- Draw NPC anchors ---
+        npcSystem.Render(projection, view, skyColor, personShader, sceneTime);
+
+        // === Draw Skybox ===
         glDepthFunc(GL_LEQUAL);
         skyboxShader.use();
-        glm::mat4 skyView = glm::mat4(glm::mat3(view)); // remove translation
+        glm::mat4 skyView = glm::mat4(glm::mat3(view));
         skyboxShader.setMat4("view",       skyView);
         skyboxShader.setMat4("projection", projection);
         skyboxShader.setVec3("sunPos",     lightingSystem.GetSunPosition());
@@ -412,12 +561,29 @@ int main() {
         glBindVertexArray(0);
         glDepthFunc(GL_LESS);
 
+        float fadeAlpha = g_cinematicMode ? cinematicSystem.GetFadeAlpha() : 0.0f;
+        if (fadeAlpha > 0.001f) {
+            glDisable(GL_DEPTH_TEST);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            fadeShader.use();
+            fadeShader.setFloat("alpha", fadeAlpha);
+            glBindVertexArray(fadeQuadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glBindVertexArray(0);
+
+            glDisable(GL_BLEND);
+            glEnable(GL_DEPTH_TEST);
+        }
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     // ---- Cleanup ----
     glDeleteTextures(1, &heightmapTex);
+    glDeleteVertexArrays(1, &fadeQuadVAO);
     glfwTerminate();
     return 0;
 }
