@@ -13,10 +13,11 @@ A modern C++ OpenGL application featuring a procedurally generated terrain with 
 
 ### Simulation Systems
 - **15,000 Instanced Trees** - Intelligent placement based on terrain height/slope with Phong lighting
-- **Procedural Grass** - Dense static grass aligned to mountain slopes with terrain-normal orientation
+- **Procedural Grass** - Dense grass on mountain slopes with terrain-normal alignment, wind sway animation (quadratic falloff with stability clamping)
 - **Dynamic Water + Coastline** - Procedural wave surface with irregular island shoreline and beach transition
 - **Town Grid** - 4×4 building blocks with illuminated windows in the terrain center
-- **Firefly Particles** - 500 glowing particles anchored above terrain and confined to forest elevation bands
+- **Firefly Particles** - 500 glowing particles with terrain-sampled height, constrained to forest elevation bands (8–85 world units)
+- **Rain Splashes** - Terrain-aware splash particles rendered at surface level during rain events
 
 ### Lighting & Atmosphere
 - **Day/Night Cycle** - Sun orbits every ~63 seconds with dynamic color interpolation

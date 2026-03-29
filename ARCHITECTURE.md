@@ -14,11 +14,13 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 
 #### 2. **GrassSystem** (`include/GrassSystem.h`, `src/GrassSystem.cpp`)
 - Generates dense grass blade instances across mountain terrain
-- Places grass in terrain world coordinates and aligns each blade to local terrain normal
-- Filters out underwater and extreme-slope areas; supports higher elevations on mountains
-- Each blade is a simple quad (2 triangles) rendered as static foliage
+- Places grass at world coordinates [0..800] × [0..800], precisely aligned to terrain space
+- Aligns each blade to local terrain normal via computed tangent/bitangent basis for slope-following orientation
+- Wind animation: sinusoidal sway with quadratic falloff from blade base, clamped height factor [0,1] for stability
+- Filters: excludes underwater (Y < 2.0), extreme slopes (> 55°), and terrain shadow regions
+- Each blade is a simple quad (2 triangles); 1.4 unit spacing creates natural density
 - Uses efficient instanced rendering (single draw call)
-- Includes randomized positioning to avoid grid artifacts
+- Dependencies: heightmap (512×512), terrain size (800×800)
 
 #### 3. **BuildingSystem** (`include/BuildingSystem.h`, `src/BuildingSystem.cpp`)
 - Creates a 4x4 grid of houses in the town center (100-150, 150-200)
@@ -33,10 +35,13 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 
 #### 5. **ParticleSystem** (`include/ParticleSystem.h`, `src/ParticleSystem.cpp`)
 - Manages 500 firefly particles with physics simulation
-- Samples terrain heightmap so fireflies stay above the terrain surface
-- Constrains spawn and relocation to forest elevation bands (tree habitat range)
-- Adds fluttering effect with random jitter while preserving above-ground placement
-- Renders as GL_POINTS with additive blending for glow effect
+- **Terrain Sampling**: Bilinear heightmap lookup for precise above-ground placement; samples at normalized world coordinates [0..800]
+- **Forest Confinement**: Constrains spawn and relocation to elevation band [8..85] world units (tree habitat range); up to 32 retry attempts on out-of-bounds spawn
+- **Height Offset**: Hovers 5–10 units above local terrain via `y = terrainHeight + BASE_HOVER`; update relocates out-of-band particles
+- **Fluttering**: Adds sinusoidal flutter with random phase and frequency while preserving elevation constraints
+- Wraps particles within terrain bounds on X/Z drift
+- Renders as GL_POINTS with additive blending; intensity fades with day/night lighting
+- Dependencies: heightmap (512×512), terrain size (800×800)
 
 #### 6. **WaterSystem** (`include/WaterSystem.h`, `src/WaterSystem.cpp`)
 - Generates 500x500 grid water mesh
@@ -45,11 +50,20 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 - Uses procedural sine wave displacement for wave simulation
 - Implements height-based color blending (deep blue to shallow cyan)
 
-#### 8. **Legacy Systems (Disabled in active main loop)**
+#### 9. **Legacy Systems (Disabled in active main loop)**
 - **NPCSystem** (`include/NPCSystem.h`, `src/NPCSystem.cpp`) is present in the codebase but not instantiated/rendered in `main_new.cpp`
 - **ColonySystem** (`include/ColonySystem.h`, `src/ColonySystem.cpp`) is present in the codebase but not instantiated/rendered in `main_new.cpp`
 
-#### 7. **LightingSystem** (`include/LightingSystem.h`, `src/LightingSystem.cpp`)
+#### 7. **SplashSystem** (`include/SplashSystem.h`, `src/SplashSystem.cpp`)
+- Renders rain impact splashes on terrain surface during active rain
+- **Terrain Sampling**: Normalizes camera-relative spawn offset to heightmap indices; applies 150.0f height scale
+- **Spawn Rate**: 3–7 splashes per frame when raining; randomized lifetime [0.2..0.4] seconds
+- **Visual**: GL_POINTS with triangle-wave size scaling, GL_SRC_ALPHA blending, disabled depth write for layering
+- **Position Offset**: +0.08 world units above sampled terrain height for visual clarity
+- Constructor signature: `SplashSystem(int maxSplashes, const std::vector<float>& heightmap, int hmWidth, int hmHeight, float terrainWidth, float terrainDepth)`
+- Dependencies: heightmap (512×512), terrain size (800×800), camera position
+
+#### 8. **LightingSystem** (`include/LightingSystem.h`, `src/LightingSystem.cpp`)
 - Implements day/night cycle with sun orbit
 - Calculates dynamic light color based on time of day
 - Interpolates sky color from night (dark) to day (bright)
@@ -84,12 +98,14 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 ```
 assets/shaders/
 ├── terrain.vert/frag    - Heightmap-based terrain with Phong lighting, shadow mapping, fog
-├── grass.vert/frag      - Instanced static grass aligned to terrain slope, fog
-├── tree.vert/frag       - Instanced tree rendering with fog
+├── grass.vert/frag      - Terrain-normal-aligned grass with wind sway (quadratic falloff, clamped)
+├── tree.vert/frag       - Instanced tree rendering with fog and wind
 ├── building.vert/frag   - Instanced building rendering with fog
 ├── person.vert/frag     - Legacy NPC shader (system currently disabled in main_new.cpp)
-├── particle.vert/frag   - GL_POINTS firefly rendering with glow
+├── particle.vert/frag   - GL_POINTS firefly rendering with additive glow
 ├── water.vert/frag      - Procedural sine wave water with light response, fog
+├── rain.vert/frag       - Rain particle rendering, camera-centered
+├── splash.vert/frag     - Terrain-aware rain splash particles with lifetime scaling
 ├── depth.vert/frag      - Shadow mapping depth pass (light space rendering)
 └── skybox.vert/frag     - Dynamic procedural skybox with stars, sunset glow
 ```

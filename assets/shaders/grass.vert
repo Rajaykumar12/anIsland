@@ -5,6 +5,8 @@ layout (location = 3) in vec3 aNormal; // Instanced terrain normal
 
 uniform mat4 view;
 uniform mat4 projection;
+uniform float u_Time;
+uniform float windStrength;
 
 out vec2  TexCoords;
 out vec3  WorldPos;
@@ -21,6 +23,19 @@ void main()
     vec3 bitangent = normalize(cross(up, tangent));
 
     vec3 localPos = tangent * aPos.x + up * aPos.y + bitangent * aPos.z;
+
+    // Wind sway: top of grass blade moves more
+    float heightFactor = clamp(localPos.y / 0.6, 0.0, 1.0); // normalize to 0-1
+    float A = 0.05 + windStrength * 0.15;
+    float omega = 2.0 + windStrength * 2.0;
+
+    // Unique phase per grass instance
+    float phase = aOffset.x * 0.5 + aOffset.z * 0.3;
+    float sway = A * sin(omega * u_Time + phase) * heightFactor * heightFactor;
+
+    localPos.x += sway;
+    localPos.z += sway * 0.5;
+
     vec3 worldPos = aOffset + localPos;
     WorldPos = worldPos;
     Normal = up;
