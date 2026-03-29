@@ -7,6 +7,8 @@ layout (location = 3) in vec3 aOffset; // Instanced world position
 uniform mat4 view;
 uniform mat4 projection;
 uniform float u_Time;
+uniform bool useModelMatrix;
+uniform mat4 model;
 
 out vec3 Normal;
 out vec3 FragPos;
@@ -15,19 +17,29 @@ out float Distance;
 
 void main()
 {
-    // Move vertex to its instanced world position
-    vec3 worldPos = aPos + aOffset;
-    
-    // Simple walking animation - gentle bob and sway
-    if (aPos.y > 1.0) { // Upper body parts
-        float walkAnim = sin(u_Time * 3.0 + aOffset.x * 0.5) * 0.1;
-        worldPos.y += walkAnim;
-        worldPos.x += walkAnim * 0.5;
+    vec3 worldPos;
+    vec3 worldNormal;
+
+    if (useModelMatrix) {
+        vec4 transformed = model * vec4(aPos, 1.0);
+        worldPos = transformed.xyz;
+        worldNormal = mat3(transpose(inverse(model))) * aNormal;
+    } else {
+        // Move vertex to its instanced world position
+        worldPos = aPos + aOffset;
+        worldNormal = aNormal;
+
+        // Simple walking animation - gentle bob and sway
+        if (aPos.y > 1.0) { // Upper body parts
+            float walkAnim = sin(u_Time * 3.0 + aOffset.x * 0.5) * 0.1;
+            worldPos.y += walkAnim;
+            worldPos.x += walkAnim * 0.5;
+        }
     }
     
     FragPos = worldPos;
-    
-    Normal = normalize(aNormal);
+
+    Normal = normalize(worldNormal);
     Color = aColor;
 
     vec4 viewPos = view * vec4(worldPos, 1.0);

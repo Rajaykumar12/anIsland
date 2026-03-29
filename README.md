@@ -15,7 +15,6 @@ A modern C++ OpenGL application featuring a procedurally generated terrain with 
 - **15,000 Instanced Trees** - Intelligent placement based on terrain height/slope with Phong lighting
 - **Procedural Grass** - Dense grass on mountain slopes with terrain-normal alignment, wind sway animation (quadratic falloff with stability clamping)
 - **Dynamic Water + Coastline** - Procedural wave surface with irregular island shoreline and beach transition
-- **Town Grid** - 4×4 building blocks with illuminated windows in the terrain center
 - **Firefly Particles** - 500 glowing particles with terrain-sampled height, constrained to forest elevation bands (8–85 world units)
 - **Rain Splashes** - Terrain-aware splash particles rendered at surface level during rain events
 
@@ -27,6 +26,7 @@ A modern C++ OpenGL application featuring a procedurally generated terrain with 
 
 ### Dynamic Features
 - **Interactive FPS Camera** - WASD movement, mouse look, vertical flight
+- **5-Minute Cinematic Story Mode** - 8-act camera timeline with static NPC anchor storytelling
 - **Wireframe Toggle** - Real-time visual debugging
 - **Optimized Rendering** - Instanced rendering for efficient batch processing
 - **Modern OpenGL** - OpenGL 3.3 Core Profile with VAO/VBO/shader architecture
@@ -95,7 +95,13 @@ make
 | **W/A/S/D** | Move forward/left/backward/right |
 | **Q/E** | Move up/down (vertical flight) |
 | **Mouse** | Look around (captured) |
+| **C** | Toggle cinematic / free camera mode |
+| **P** | Play/pause cinematic timeline |
+| **[ / ]** | Seek cinematic timeline by -/+10s |
+| **, / .** | Jump to previous/next act boundary |
+| **B** | Restart cinematic timeline |
 | **F** | Toggle wireframe mode |
+| **R** | Toggle rain |
 | **ESC** | Exit application |
 
 ## Project Structure
@@ -113,7 +119,6 @@ CGAssignment/
 │   ├── NoiseMap.h             # Perlin noise generation
 │   ├── TreeSystem.h           # 15,000 instanced trees (NEW)
 │   ├── GrassSystem.h          # Static slope-aligned mountain grass (NEW)
-│   ├── BuildingSystem.h       # Town buildings (NEW)
 │   ├── ParticleSystem.h       # Firefly particles (NEW)
 │   ├── WaterSystem.h          # Dynamic water (NEW)
 │   ├── LightingSystem.h       # Day/night cycle & shadows (NEW)
@@ -125,7 +130,6 @@ CGAssignment/
 │   ├── terrain.vert/.frag     # Terrain rendering with shadows
 │   ├── grass.vert/.frag       # Static slope-aligned grass
 │   ├── tree.vert/.frag        # Instanced tree rendering
-│   ├── building.vert/.frag    # Building rendering
 │   ├── particle.vert/.frag    # Firefly rendering
 │   ├── water.vert/.frag       # Procedural water
 │   ├── depth.vert/.frag       # Shadow map generation
@@ -143,11 +147,12 @@ This project uses a **modular system-based architecture** for maintainability an
 - **Terrain System** - Procedurally generates heightmap using fractal Brownian motion
 - **Lighting System** - Manages day/night cycle, shadow mapping, and fog parameters
 - **Tree System** - Renders 15,000 trees with intelligent placement
-- **Building System** - Creates town-center buildings in 4×4 grid
 - **Particle System** - Manages 500 forest-band firefly particles above terrain
 - **Grass System** - Generates dense, static, slope-aligned grass across mountain surfaces
 - **Water System** - Creates dynamic water surface with wave displacement
 - **Rain System** - Rain particle simulation
+- **NPC System** - Three static anchor NPC states (beach, valley, mountain) with timeline visibility windows
+- **Cinematic System** - Keyframed camera/FOV/time-of-day/fade control over a 300-second narrative
 
 ### Rendering Pipeline
 
@@ -177,7 +182,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation of all systems
 
 ## Performance Considerations
 
-- **Instancing** - Trees, buildings, and grass rendered efficiently in batches
+- **Instancing** - Trees and grass rendered efficiently in batches
 - **Frustum Culling** - Optional optimization for large object counts
 - **Level of Detail** - Terrain LOD can be adjusted via grid resolution
 - **Shadow Type** - Directional shadows optimized for landscape rendering
@@ -185,7 +190,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation of all systems
 ## Development Notes
 
 - **Shader Assets** - Located in `assets/shaders/`, automatically copied to build directory
-- **Camera Position** - Default spawn: (125, 200, 175) above town center
+- **Camera Position** - Default spawn: (125, 200, 175)
 - **Terrain Size** - 800×800 vertices spanning 800×800 world units
 - **Day Speed** - One full day/night cycle ≈ 63 seconds
 

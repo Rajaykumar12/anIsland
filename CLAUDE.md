@@ -22,26 +22,28 @@ make
 - `Terrain` - 800×800 vertex grid with Perlin noise heightmap, height-based color bands
 - `TreeSystem` - 15,000 instanced trees placed by terrain height/slope
 - `GrassSystem` - Dense instanced grass with terrain-normal alignment, wind animation, slope filtering
-- `BuildingSystem` - 4×4 town grid at center (100-150, 150-200 world coords)
 - `ParticleSystem` - 500 fireflies terrain-sampled, constrained to forest elevation bands (8-85 world units)
 - `WaterSystem` - 500×500 wave mesh at Y ≈ -1.5 with procedural sine displacement
 - `RainSystem` - Toggleable (R key) rain particles, camera-centered
 - `SplashSystem` - Rain impact splashes terrain-aware, rendered at surface level during rain
+- `NPCSystem` - Static cinematic anchor NPCs with timeline visibility windows and pose transforms
+- `CinematicSystem` - 300s keyframed story timeline (camera, FOV, time-of-day, fade)
 
-**Disabled Systems** (present but not instantiated in main_new.cpp):
-- `NPCSystem`, `ColonySystem`
+**Disabled Systems**:
+- None
 
 **Key Shader Files** (`assets/shaders/`):
 - `depth.vert/frag` - Shadow map generation (light space transform)
 - `terrain.vert/frag` - Terrain with shadow sampling, fog, Phong lighting
 - `grass.vert/frag` - Terrain-normal-aligned grass with wind sway animation
 - `tree.vert/frag` - Instanced trees with wind effect
-- `building.vert/frag` - Instanced buildings
 - `particle.vert/frag` - Firefly rendering with glow
 - `water.vert/frag` - Procedural wave displacement
 - `rain.vert/frag` - Rain particle rendering
 - `splash.vert/frag` - Terrain-aware splash particles
 - `skybox.vert/frag` - Procedural sky with stars, sunset glow, day/night color
+- `person.vert/frag` - Cinematic NPC rendering
+- `fade.vert/frag` - Fullscreen fade-to-black overlay
 
 ## Key Implementation Details
 
@@ -70,7 +72,11 @@ make
 - Implemented terrain height sampling in ParticleSystem for firefly placement
 - Constrained fireflies to forest elevation band (8-85 world units) with retry spawning
 - Completed SplashSystem: terrain-aware spawn positions, integrated rendering in main loop
-- Disabled NPC/Colony systems (still compiled but not instantiated in main_new.cpp)
+- Re-enabled NPCSystem for cinematic anchor storytelling
+- Removed the legacy settlement system entirely from the project
+- Removed BuildingSystem and building shader assets from the project
+- Implemented CinematicSystem 8-act timeline with camera/FOV/time-of-day/fade keyframes
+- Added cinematic controls: C toggle, P play/pause, [ ] seek, , . act jumps, B restart
 
 ## Troubleshooting
 

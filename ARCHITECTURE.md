@@ -22,12 +22,6 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 - Uses efficient instanced rendering (single draw call)
 - Dependencies: heightmap (512×512), terrain size (800×800)
 
-#### 3. **BuildingSystem** (`include/BuildingSystem.h`, `src/BuildingSystem.cpp`)
-- Creates a 4x4 grid of houses in the town center (100-150, 150-200)
-- Each building has walls, roof (pyramid), and windows
-- All geometry stored as triangles for GL_TRIANGLES rendering
-- Instanced rendering for efficient batch processing
-
 #### 4. **RainSystem** (`include/RainSystem.h`, `src/RainSystem.cpp`)
 - Simulates large rain particle fields over the terrain
 - Toggleable in runtime (R key)
@@ -50,9 +44,15 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 - Uses procedural sine wave displacement for wave simulation
 - Implements height-based color blending (deep blue to shallow cyan)
 
-#### 9. **Legacy Systems (Disabled in active main loop)**
-- **NPCSystem** (`include/NPCSystem.h`, `src/NPCSystem.cpp`) is present in the codebase but not instantiated/rendered in `main_new.cpp`
-- **ColonySystem** (`include/ColonySystem.h`, `src/ColonySystem.cpp`) is present in the codebase but not instantiated/rendered in `main_new.cpp`
+#### 9. **NPCSystem** (`include/NPCSystem.h`, `src/NPCSystem.cpp`)
+- Renders static cinematic anchor NPCs with pose-specific model transforms
+- Uses visibility windows driven by cinematic timeline time
+- Supports prone, sitting, and standing poses for narrative progression
+
+#### 10. **CinematicSystem** (`include/CinematicSystem.h`, `src/CinematicSystem.cpp`)
+- Drives full 300-second story timeline via keyframed camera position, target, FOV, time-of-day, and fade alpha
+- Provides play/pause, restart, seek, and act-boundary navigation support
+- Powers 8-act storytelling structure (Acts 1-8)
 
 #### 7. **SplashSystem** (`include/SplashSystem.h`, `src/SplashSystem.cpp`)
 - Renders rain impact splashes on terrain surface during active rain
@@ -76,7 +76,7 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 
 - **Camera** (`include/Camera.h`, `src/Camera.cpp`)
   - FPS camera with mouse look and WASD movement
-  - Default position: (125, 200, 175) above town center
+  - Default position: (125, 200, 175)
 
 - **Terrain** (`include/Terrain.h`, `src/Terrain.cpp`)
   - 800x800 vertex grid with procedural Perlin noise heightmap
@@ -100,14 +100,15 @@ assets/shaders/
 ├── terrain.vert/frag    - Heightmap-based terrain with Phong lighting, shadow mapping, fog
 ├── grass.vert/frag      - Terrain-normal-aligned grass with wind sway (quadratic falloff, clamped)
 ├── tree.vert/frag       - Instanced tree rendering with fog and wind
-├── building.vert/frag   - Instanced building rendering with fog
 ├── person.vert/frag     - Legacy NPC shader (system currently disabled in main_new.cpp)
 ├── particle.vert/frag   - GL_POINTS firefly rendering with additive glow
 ├── water.vert/frag      - Procedural sine wave water with light response, fog
 ├── rain.vert/frag       - Rain particle rendering, camera-centered
 ├── splash.vert/frag     - Terrain-aware rain splash particles with lifetime scaling
 ├── depth.vert/frag      - Shadow mapping depth pass (light space rendering)
-└── skybox.vert/frag     - Dynamic procedural skybox with stars, sunset glow
+├── skybox.vert/frag      - Dynamic procedural skybox with stars, sunset glow
+├── person.vert/frag      - NPC rendering for cinematic anchor poses
+└── fade.vert/frag        - Fullscreen cinematic fade overlay pass
 ```
 
 ### Build System
@@ -130,7 +131,6 @@ CGAssignment/
 │   ├── NoiseMap.h
 │   ├── TreeSystem.h      # NEW
 │   ├── GrassSystem.h     # NEW
-│   ├── BuildingSystem.h  # NEW
 │   ├── NPCSystem.h       # NEW
 │   ├── ParticleSystem.h  # NEW
 │   ├── WaterSystem.h     # NEW
@@ -142,7 +142,6 @@ CGAssignment/
 │   ├── NoiseMap.cpp
 │   ├── TreeSystem.cpp    # NEW
 │   ├── GrassSystem.cpp   # NEW
-│   ├── BuildingSystem.cpp # NEW
 │   ├── NPCSystem.cpp     # NEW
 │   ├── ParticleSystem.cpp # NEW
 │   ├── WaterSystem.cpp   # NEW
@@ -169,6 +168,11 @@ make
 - **ESC** - Exit
 - **F** - Toggle wireframe mode
 - **R** - Toggle rain
+- **C** - Toggle cinematic mode / free camera mode
+- **P** - Play/pause cinematic timeline
+- **[ / ]** - Seek timeline by -/+10 seconds
+- **, / .** - Jump to previous/next act boundary
+- **B** - Restart cinematic timeline
 
 ### Key Features
 
@@ -179,7 +183,7 @@ make
 ✅ **Day/Night Cycle** - Sun orbits every ~63 seconds, all lighting changes dynamically
 ✅ **Firefly Particles** - 500 glowing particles with physics-based movement
 ✅ **Dynamic Water + Shoreline** - Procedural waves with irregular coast and beach transition
-✅ **Terrain Instancing** - 15,000 trees, 16 buildings, and dense mountain grass rendered efficiently
+✅ **Terrain Instancing** - 15,000 trees and dense mountain grass rendered efficiently
 ✅ **Two-Pass Rendering** - Depth pass (light space) + Color pass (camera space with shadows)
 
 ### Rendering Pipeline
@@ -234,8 +238,7 @@ The modern rendering pipeline uses a **two-pass approach**:
 ### Performance Notes
 
 - **Tree Count**: 15,000 (instanced, 1 draw call)
-- **Building Count**: 16 (instanced, 1 draw call)
-- **NPC Count**: Disabled in active `main_new.cpp` pipeline
+- **NPC Count**: 3 static cinematic anchor NPCs (visibility-window driven)
 - **Terrain Resolution**: 800x800 vertices
 - **Particle Count**: 500 (updated each frame)
 - **Water Grid**: 500x500 triangles (100k + polygons)
