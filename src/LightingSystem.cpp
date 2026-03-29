@@ -7,7 +7,8 @@
 const unsigned int SHADOW_WIDTH = 2048, SHADOW_HEIGHT = 2048;
 
 LightingSystem::LightingSystem() : daySpeed(0.1f), sunRadius(100.0f), 
-                                   timeOfDay(0.5f), lightIntensity(1.0f) {
+                                   timeOfDay(0.5f), lightIntensity(1.0f),
+                                   useManualTime(false), manualTimeOfDay(0.5f) {
     sunPos = glm::vec3(0.0f, sunRadius, 0.0f);
     lightColor = glm::vec3(1.0f, 1.0f, 0.9f);
     skyColor = glm::vec3(0.7f, 0.8f, 1.0f);
@@ -56,13 +57,29 @@ void LightingSystem::UpdateShadowMatrices() {
 }
 
 void LightingSystem::Update(float currentTime) {
+    float angle = 0.0f;
+    if (useManualTime) {
+        angle = glm::clamp(manualTimeOfDay, 0.0f, 1.0f) * 6.2831853f;
+    } else {
+        angle = currentTime * daySpeed;
+    }
+
     // Calculate sun position with orbit
-    float sunX = sunRadius * cos(currentTime * daySpeed);
-    float sunY = sunRadius * sin(currentTime * daySpeed);
+    float sunX = sunRadius * cos(angle);
+    float sunY = sunRadius * sin(angle);
     sunPos = glm::vec3(sunX, sunY, 0.0f);
     
     CalculateLighting();
     UpdateShadowMatrices();
+}
+
+void LightingSystem::SetManualTimeOfDay(float normalizedTime) {
+    useManualTime = true;
+    manualTimeOfDay = glm::clamp(normalizedTime, 0.0f, 1.0f);
+}
+
+void LightingSystem::ClearManualTimeOverride() {
+    useManualTime = false;
 }
 
 void LightingSystem::CalculateLighting() {
