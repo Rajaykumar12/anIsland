@@ -52,7 +52,8 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 #### 10. **CinematicSystem** (`include/CinematicSystem.h`, `src/CinematicSystem.cpp`)
 - Drives full 300-second story timeline via keyframed camera position, target, FOV, time-of-day, and fade alpha
 - Provides play/pause, restart, seek, and act-boundary navigation support
-- Powers 8-act storytelling structure (Acts 1-8)
+- Uses smoothstep interpolation for scalar and vector track sampling
+- Powers 8-act storytelling structure (Acts 1-8) with mountain-focused opening/ending compositions
 
 #### 7. **SplashSystem** (`include/SplashSystem.h`, `src/SplashSystem.cpp`)
 - Renders rain impact splashes on terrain surface during active rain
@@ -76,6 +77,8 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 
 - **Camera** (`include/Camera.h`, `src/Camera.cpp`)
   - FPS camera with mouse look and WASD movement
+  - Cinematic mode updates basis vectors (`Front`, `Right`, `Up`) each frame from timeline target direction
+  - Uses a fallback up-reference when forward is nearly parallel to world up to avoid roll artifacts
   - Default position: (125, 200, 175)
 
 - **Terrain** (`include/Terrain.h`, `src/Terrain.cpp`)
@@ -100,7 +103,6 @@ assets/shaders/
 ├── terrain.vert/frag    - Heightmap-based terrain with Phong lighting, shadow mapping, fog
 ├── grass.vert/frag      - Terrain-normal-aligned grass with wind sway (quadratic falloff, clamped)
 ├── tree.vert/frag       - Instanced tree rendering with fog and wind
-├── person.vert/frag     - Legacy NPC shader (system currently disabled in main_new.cpp)
 ├── particle.vert/frag   - GL_POINTS firefly rendering with additive glow
 ├── water.vert/frag      - Procedural sine wave water with light response, fog
 ├── rain.vert/frag       - Rain particle rendering, camera-centered
@@ -199,7 +201,7 @@ The modern rendering pipeline uses a **two-pass approach**:
 **Pass 2: Color Rendering (Scene)**
 - Viewport: Restored to window size (1280×720 default)
 - Framebuffer: Screen framebuffer
-- Shaders: All standard shaders (terrain, tree, building, water, etc.)
+- Shaders: All active standard shaders (terrain, tree, grass, water, rain/splash, particle, NPC)
 - Shadow Map: Bound as GL_TEXTURE1, sampled in fragment shaders
 - Fog: Applied using camera distance, color varies with day/night cycle
 

@@ -27,7 +27,7 @@ make
 - `RainSystem` - Toggleable (R key) rain particles, camera-centered
 - `SplashSystem` - Rain impact splashes terrain-aware, rendered at surface level during rain
 - `NPCSystem` - Static cinematic anchor NPCs with timeline visibility windows and pose transforms
-- `CinematicSystem` - 300s keyframed story timeline (camera, FOV, time-of-day, fade)
+- `CinematicSystem` - 300s keyframed story timeline (camera, FOV, time-of-day, fade) with smooth interpolation and mountain-focused opening/ending shots
 
 **Disabled Systems**:
 - None
@@ -76,6 +76,8 @@ make
 - Removed the legacy settlement system entirely from the project
 - Removed BuildingSystem and building shader assets from the project
 - Implemented CinematicSystem 8-act timeline with camera/FOV/time-of-day/fade keyframes
+- Stabilized cinematic camera orientation by recomputing Front/Right/Up each frame with near-vertical fallback
+- Simplified cinematic keyframe density to reduce jitter and improve mountain readability
 - Added cinematic controls: C toggle, P play/pause, [ ] seek, , . act jumps, B restart
 
 ## Troubleshooting
@@ -85,3 +87,4 @@ make
 - **Fireflies underground**: Ensure `ParticleSystem::init()` samples terrain heightmap correctly
 - **Grass not visible**: Verify grass coordinate frame [0..800]; check heightmap is loaded in GrassSystem
 - **Splashes in air**: Ensure SplashSystem constructor receives correct heightmap and terrain dimensions
+- **Cinematic tilt/jitter**: Verify cinematic camera path in `main_new.cpp` recomputes basis vectors from target direction each frame

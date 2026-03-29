@@ -26,7 +26,7 @@ A modern C++ OpenGL application featuring a procedurally generated terrain with 
 
 ### Dynamic Features
 - **Interactive FPS Camera** - WASD movement, mouse look, vertical flight
-- **5-Minute Cinematic Story Mode** - 8-act camera timeline with static NPC anchor storytelling
+- **5-Minute Cinematic Story Mode** - 8-act keyframed timeline with static NPC anchors, stabilized camera basis, and mountain-focused opening/ending compositions
 - **Wireframe Toggle** - Real-time visual debugging
 - **Optimized Rendering** - Instanced rendering for efficient batch processing
 - **Modern OpenGL** - OpenGL 3.3 Core Profile with VAO/VBO/shader architecture
@@ -117,12 +117,15 @@ CGAssignment/
 │   ├── Camera.h               # FPS camera controller
 │   ├── Shader.h               # OpenGL shader utility
 │   ├── NoiseMap.h             # Perlin noise generation
-│   ├── TreeSystem.h           # 15,000 instanced trees (NEW)
-│   ├── GrassSystem.h          # Static slope-aligned mountain grass (NEW)
-│   ├── ParticleSystem.h       # Firefly particles (NEW)
-│   ├── WaterSystem.h          # Dynamic water (NEW)
-│   ├── LightingSystem.h       # Day/night cycle & shadows (NEW)
-│   ├── RainSystem.h           # Rain simulation (NEW)
+│   ├── TreeSystem.h           # 15,000 instanced trees
+│   ├── GrassSystem.h          # Terrain-normal-aligned grass
+│   ├── ParticleSystem.h       # Firefly particles
+│   ├── WaterSystem.h          # Dynamic water
+│   ├── LightingSystem.h       # Day/night cycle & shadows
+│   ├── RainSystem.h           # Rain simulation
+│   ├── SplashSystem.h         # Rain impact splashes
+│   ├── NPCSystem.h            # Cinematic NPC anchors
+│   ├── CinematicSystem.h      # 300s keyframed story controller
 │   └── glad/glad.h            # OpenGL headers
 ├── src/
 │   ├── [Corresponding .cpp implementations]
@@ -134,6 +137,9 @@ CGAssignment/
 │   ├── water.vert/.frag       # Procedural water
 │   ├── depth.vert/.frag       # Shadow map generation
 │   ├── rain.vert/.frag        # Rain particles
+│   ├── splash.vert/.frag      # Terrain-aware rain splashes
+│   ├── person.vert/.frag      # Cinematic NPC rendering
+│   ├── fade.vert/.frag        # Fullscreen fade overlay
 │   └── skybox.vert/.frag      # Dynamic sky rendering
 └── build/                      # CMake build directory
 ```
@@ -152,7 +158,13 @@ This project uses a **modular system-based architecture** for maintainability an
 - **Water System** - Creates dynamic water surface with wave displacement
 - **Rain System** - Rain particle simulation
 - **NPC System** - Three static anchor NPC states (beach, valley, mountain) with timeline visibility windows
-- **Cinematic System** - Keyframed camera/FOV/time-of-day/fade control over a 300-second narrative
+- **Cinematic System** - Keyframed camera/FOV/time-of-day/fade control over a 300-second narrative using smoothstep interpolation
+
+### Cinematic Camera Stability
+
+- In cinematic mode, camera basis vectors are rebuilt every frame from the sampled target direction.
+- A world-up fallback is used when forward direction is nearly parallel to up, preventing roll/tilt artifacts.
+- This keeps horizon alignment stable while preserving free-camera behavior outside cinematic mode.
 
 ### Rendering Pipeline
 
@@ -205,6 +217,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation of all systems
 - Verify `assets/shaders/` directory exists in build output
 - Check OpenGL version support: `glxinfo | grep "OpenGL version"`
 - Try updating GPU drivers
+
+### Cinematic camera appears tilted
+- Ensure cinematic mode is enabled with `C` and timeline is progressing.
+- Confirm the cinematic path in `main_new.cpp` recomputes `Front`, `Right`, and `Up` from keyframed target direction.
+- If behavior seems off after edits, rebuild from `build/` with `cmake .. && make`.
 
 ### Poor performance
 - Reduce terrain grid resolution in [Terrain.h](include/Terrain.h)
