@@ -25,6 +25,7 @@
 #include "GrassSystem.h"
 #include "LightingSystem.h"
 #include "RainSystem.h"
+#include "SplashSystem.h"
 
 // ---- Window dimensions ----
 const unsigned int SCR_WIDTH  = 1280;
@@ -71,6 +72,7 @@ void scroll_callback(GLFWwindow* /*win*/, double /*xoffset*/, double yoffset) {
 
 // Rain system forward reference for key callback
 RainSystem* g_rainSystem = nullptr;
+bool g_rainEnabled = false;
 
 void processInput(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -98,6 +100,7 @@ void processInput(GLFWwindow* window) {
     bool rIsDown = glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS;
     if (rIsDown && !rWasDown && g_rainSystem) {
         g_rainSystem->Toggle();
+        g_rainEnabled = !g_rainEnabled;
     }
     rWasDown = rIsDown;
 }
@@ -232,6 +235,7 @@ int main() {
     WaterSystem   waterSystem(2000, 2000);
     LightingSystem lightingSystem;
     RainSystem    rainSystem(5000);
+    SplashSystem  splashSystem(200, noiseData, HM_W, HM_H, 800.0f, 800.0f);
     g_rainSystem = &rainSystem;
 
     // ---- 5. Load Shaders ----
@@ -243,6 +247,7 @@ int main() {
     Shader waterShader   ("assets/shaders/water.vert",    "assets/shaders/water.frag");
     Shader skyboxShader  ("assets/shaders/skybox.vert",   "assets/shaders/skybox.frag");
     Shader rainShader    ("assets/shaders/rain.vert",     "assets/shaders/rain.frag");
+    Shader splashShader  ("assets/shaders/splash.vert",   "assets/shaders/splash.frag");
     Shader depthShader   ("assets/shaders/depth.vert",    "assets/shaders/depth.frag");
 
     // Tell terrain shader which texture unit holds the heightmap
@@ -269,6 +274,7 @@ int main() {
         // Update moving systems
         particleSystem.Update(deltaTime);
         rainSystem.Update(deltaTime, camera.Position);
+        splashSystem.Update(deltaTime, g_rainEnabled, camera.Position);
 
         // Retrieve lighting values once per frame
         glm::vec3 lightDir    = lightingSystem.GetLightDir();
@@ -304,7 +310,6 @@ int main() {
 
         // Draw buildings to depth map
         buildingSystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader);
-
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -390,6 +395,9 @@ int main() {
 
         // --- Draw Rain (if enabled, toggle with R) ---
         rainSystem.Render(projection, view, rainShader);
+
+        // --- Draw Rain Splashes ---
+        splashSystem.Render(projection, view, splashShader);
 
         // === Draw Skybox (last, with special depth handling) ===
         glDepthFunc(GL_LEQUAL);
