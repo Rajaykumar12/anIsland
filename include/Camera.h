@@ -28,7 +28,7 @@ public:
     void ProcessKeyboard(Camera_Movement direction, float deltaTime);
     void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true);
     void ProcessMouseScroll(float yoffset);
+    void updateCameraVectors();
 
 private:
-    void updateCameraVectors();
 };

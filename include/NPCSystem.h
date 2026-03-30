@@ -14,6 +14,7 @@ public:
     void Render(const glm::mat4& projection, const glm::mat4& view,
                 const glm::vec3& skyColor, Shader& shader, float currentTime);
 
+    unsigned int GetVAO() const { return personVAO; }
     int GetVertexCount()   const { return personVertexCount; }
     int GetInstanceCount() const { return (int)personTranslations.size(); }
 
