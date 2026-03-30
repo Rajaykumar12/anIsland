@@ -7,12 +7,15 @@
 const unsigned int SHADOW_WIDTH = 2048, SHADOW_HEIGHT = 2048;
 
 LightingSystem::LightingSystem() : daySpeed(0.1f), sunRadius(100.0f), 
-                                   timeOfDay(0.5f), lightIntensity(1.0f) {
-    sunPos = glm::vec3(0.0f, sunRadius, 0.0f);
+                                   timeOfDay(0.5f), lightIntensity(1.0f),
+                                   orbitAngle(0.0f), timeScale(1.0f) {
+    sunPos = glm::vec3(sunRadius, 0.0f, 0.0f);
     lightColor = glm::vec3(1.0f, 1.0f, 0.9f);
     skyColor = glm::vec3(0.7f, 0.8f, 1.0f);
     
     SetupShadowMapping();
+    CalculateLighting();
+    UpdateShadowMatrices();
 }
 
 LightingSystem::~LightingSystem() {
@@ -56,13 +59,29 @@ void LightingSystem::UpdateShadowMatrices() {
 }
 
 void LightingSystem::Update(float currentTime) {
+    // currentTime is treated as frame delta time in seconds.
+    orbitAngle += currentTime * daySpeed * timeScale;
+
     // Calculate sun position with orbit
-    float sunX = sunRadius * cos(currentTime * daySpeed);
-    float sunY = sunRadius * sin(currentTime * daySpeed);
+    float sunX = sunRadius * cos(orbitAngle);
+    float sunY = sunRadius * sin(orbitAngle);
     sunPos = glm::vec3(sunX, sunY, 0.0f);
     
     CalculateLighting();
     UpdateShadowMatrices();
+}
+
+void LightingSystem::setTimeOfDay(float t) {
+    orbitAngle = t;
+    float sunX = sunRadius * cos(orbitAngle);
+    float sunY = sunRadius * sin(orbitAngle);
+    sunPos = glm::vec3(sunX, sunY, 0.0f);
+    CalculateLighting();
+    UpdateShadowMatrices();
+}
+
+void LightingSystem::setTimeScale(float scale) {
+    timeScale = scale;
 }
 
 void LightingSystem::CalculateLighting() {
