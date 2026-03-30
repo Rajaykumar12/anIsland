@@ -23,6 +23,7 @@ set(SOURCES
     src/LightingSystem.cpp
     src/RainSystem.cpp
     src/SplashSystem.cpp
+    src/CinematicSystem.cpp
     glad.c            # Using the glad.c present at project root
 )
 
