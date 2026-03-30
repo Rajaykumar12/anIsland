@@ -20,12 +20,14 @@
 #include "NoiseMap.h"
 #include "TreeSystem.h"
 #include "BuildingSystem.h"
+#include "NPCSystem.h"
 #include "ParticleSystem.h"
 #include "WaterSystem.h"
 #include "GrassSystem.h"
 #include "LightingSystem.h"
 #include "RainSystem.h"
 #include "SplashSystem.h"
+#include "CinematicSystem.h"
 
 // ---- Window dimensions ----
 const unsigned int SCR_WIDTH  = 1280;
@@ -36,6 +38,7 @@ Camera camera(glm::vec3(125.0f, 200.0f, 175.0f));
 float lastX      = SCR_WIDTH  / 2.0f;
 float lastY      = SCR_HEIGHT / 2.0f;
 bool  firstMouse = true;
+bool  g_cinematicMode = true;
 
 // ---- Timing ----
 float deltaTime = 0.0f;
@@ -49,6 +52,10 @@ void framebuffer_size_callback(GLFWwindow* /*win*/, int width, int height) {
 }
 
 void mouse_callback(GLFWwindow* /*win*/, double xposIn, double yposIn) {
+    if (g_cinematicMode) {
+        return;
+    }
+
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
 
@@ -67,6 +74,9 @@ void mouse_callback(GLFWwindow* /*win*/, double xposIn, double yposIn) {
 }
 
 void scroll_callback(GLFWwindow* /*win*/, double /*xoffset*/, double yoffset) {
+    if (g_cinematicMode) {
+        return;
+    }
     camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
 
@@ -180,6 +190,29 @@ unsigned int createSkyboxCube() {
     return skyboxVAO;
 }
 
+unsigned int createFullscreenQuad() {
+    float vertices[] = {
+        -1.0f, -1.0f,
+         1.0f, -1.0f,
+         1.0f,  1.0f,
+        -1.0f, -1.0f,
+         1.0f,  1.0f,
+        -1.0f,  1.0f
+    };
+
+    unsigned int quadVAO, quadVBO;
+    glGenVertexArrays(1, &quadVAO);
+    glGenBuffers(1, &quadVBO);
+    glBindVertexArray(quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glBindVertexArray(0);
+
+    return quadVAO;
+}
+
 // -------------------------------------------------------
 int main() {
     // ---- 1. GLFW Init ----
@@ -231,11 +264,14 @@ int main() {
     TreeSystem    treeSystem(noiseData, HM_W, HM_H, 800, 800);
     GrassSystem   grassSystem(noiseData, HM_W, HM_H, 800, 800);
     BuildingSystem buildingSystem;
+    NPCSystem     npcSystem;
     ParticleSystem particleSystem(500, noiseData, HM_W, HM_H, 800.0f, 800.0f);
     WaterSystem   waterSystem(2000, 2000);
     LightingSystem lightingSystem;
     RainSystem    rainSystem(5000);
     SplashSystem  splashSystem(200, noiseData, HM_W, HM_H, 800.0f, 800.0f);
+    CinematicSystem cinematic;
+    cinematic.init();
     g_rainSystem = &rainSystem;
 
     // ---- 5. Load Shaders ----
@@ -249,6 +285,8 @@ int main() {
     Shader rainShader    ("assets/shaders/rain.vert",     "assets/shaders/rain.frag");
     Shader splashShader  ("assets/shaders/splash.vert",   "assets/shaders/splash.frag");
     Shader depthShader   ("assets/shaders/depth.vert",    "assets/shaders/depth.frag");
+    Shader personShader  ("assets/shaders/person.vert",   "assets/shaders/person.frag");
+    Shader fadeShader    ("assets/shaders/fade.vert",     "assets/shaders/fade.frag");
 
     // Tell terrain shader which texture unit holds the heightmap
     terrainShader.use();
@@ -256,6 +294,9 @@ int main() {
 
     // Create skybox VAO
     unsigned int skyboxVAO = createSkyboxCube();
+    unsigned int fadeQuadVAO = createFullscreenQuad();
+
+    float fadeAlpha = 0.0f;
 
     // ---- 6. Render Loop ----
     while (!glfwWindowShouldClose(window)) {
@@ -263,10 +304,31 @@ int main() {
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        processInput(window);
+        if (g_cinematicMode) {
+            if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+                g_cinematicMode = false;
+                lightingSystem.setTimeScale(1.0f);
+                fadeAlpha = 0.0f;
+                firstMouse = true;
+            } else {
+                bool stillPlaying = cinematic.update(deltaTime, camera, &lightingSystem);
+                if (cinematic.currentTime() >= 369.0f) {
+                    float t = (cinematic.currentTime() - 369.0f) / 6.0f;
+                    fadeAlpha = glm::clamp(t, 0.0f, 1.0f);
+                }
+                if (!stillPlaying) {
+                    g_cinematicMode = false;
+                    firstMouse = true;
+                }
+            }
+        } else {
+            processInput(window);
+            lightingSystem.setTimeScale(1.0f);
+            fadeAlpha = 0.0f;
+        }
 
-        // Update lighting/day-night cycle
-        lightingSystem.Update(currentFrame);
+        // Update lighting/day-night cycle using delta time.
+        lightingSystem.Update(deltaTime);
 
         // Compute dynamic wind strength (slow sine, 0->1)
         float windStrength = 0.5f + 0.5f * std::sin(currentFrame * 0.15f);
@@ -399,6 +461,35 @@ int main() {
         // --- Draw Rain Splashes ---
         splashSystem.Render(projection, view, splashShader);
 
+        // --- Draw static cinematic NPCs ---
+        if (g_cinematicMode) {
+            auto renderStaticNPC = [&](const StaticNPC& npc) {
+                if (!npc.visible) {
+                    return;
+                }
+
+                personShader.use();
+                personShader.setMat4("projection", projection);
+                personShader.setMat4("view", view);
+                personShader.setMat4("model", npc.modelMatrix);
+                personShader.setInt("uUseModel", 1);
+                personShader.setFloat("u_Time", 0.0f);
+                personShader.setVec3("skyColor", skyColor);
+                personShader.setVec3("lightDir", lightDir);
+                personShader.setVec3("lightColor", lightColor);
+                personShader.setVec3("sunsetTint", sunsetTint);
+                personShader.setFloat("ambientStrength", 0.25f);
+
+                glBindVertexArray(npcSystem.GetVAO());
+                glDrawArrays(GL_TRIANGLES, 0, npcSystem.GetVertexCount());
+                glBindVertexArray(0);
+            };
+
+            renderStaticNPC(cinematic.npcA());
+            renderStaticNPC(cinematic.npcB());
+            renderStaticNPC(cinematic.npcC());
+        }
+
         // === Draw Skybox (last, with special depth handling) ===
         glDepthFunc(GL_LEQUAL);
         skyboxShader.use();
@@ -411,6 +502,21 @@ int main() {
         glDrawArrays(GL_TRIANGLES, 0, 36);
         glBindVertexArray(0);
         glDepthFunc(GL_LESS);
+
+        if (fadeAlpha > 0.0f) {
+            glDisable(GL_DEPTH_TEST);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            fadeShader.use();
+            fadeShader.setFloat("alpha", fadeAlpha);
+            glBindVertexArray(fadeQuadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glBindVertexArray(0);
+
+            glDisable(GL_BLEND);
+            glEnable(GL_DEPTH_TEST);
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();
