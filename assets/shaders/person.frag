@@ -10,6 +10,7 @@ uniform vec3 skyColor;
 uniform vec3 lightDir;
 uniform vec3 lightColor;
 uniform vec3 sunsetTint;
+uniform float ambientStrength;
 
 void main()
 {
@@ -19,7 +20,8 @@ void main()
     // Phong lighting with dynamic sun color
     float diff   = max(dot(norm, lightDir), 0.2);
     vec3 diffuse = diff * Color * lightColor;
-    vec3 ambient = Color * mix(vec3(0.2), lightColor * 0.4, 0.5);
+    float amb = max(ambientStrength, 0.2);
+    vec3 ambient = Color * mix(vec3(amb), lightColor * 0.4, 0.5);
 
     vec3 litColor = ambient + diffuse;
 

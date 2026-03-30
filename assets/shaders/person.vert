@@ -6,6 +6,8 @@ layout (location = 3) in vec3 aOffset; // Instanced world position
 
 uniform mat4 view;
 uniform mat4 projection;
+uniform mat4 model;
+uniform int uUseModel;
 uniform float u_Time;
 
 out vec3 Normal;
@@ -15,19 +17,28 @@ out float Distance;
 
 void main()
 {
-    // Move vertex to its instanced world position
-    vec3 worldPos = aPos + aOffset;
+    vec3 localPos = aPos;
+    vec3 worldPos;
+    vec3 worldNormal;
     
-    // Simple walking animation - gentle bob and sway
-    if (aPos.y > 1.0) { // Upper body parts
+    // Simple walking animation for instanced crowd NPCs.
+    if (uUseModel == 0 && aPos.y > 1.0) {
         float walkAnim = sin(u_Time * 3.0 + aOffset.x * 0.5) * 0.1;
-        worldPos.y += walkAnim;
-        worldPos.x += walkAnim * 0.5;
+        localPos.y += walkAnim;
+        localPos.x += walkAnim * 0.5;
+    }
+
+    if (uUseModel == 1) {
+        vec4 wp = model * vec4(localPos, 1.0);
+        worldPos = wp.xyz;
+        worldNormal = normalize(mat3(transpose(inverse(model))) * aNormal);
+    } else {
+        worldPos = localPos + aOffset;
+        worldNormal = normalize(aNormal);
     }
     
     FragPos = worldPos;
-    
-    Normal = normalize(aNormal);
+    Normal = worldNormal;
     Color = aColor;
 
     vec4 viewPos = view * vec4(worldPos, 1.0);
