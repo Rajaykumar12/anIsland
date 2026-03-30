@@ -1,6 +1,6 @@
 // ============================================================
 // OpenGL Terrain Visualization - Modular Architecture
-// Systems: Terrain, Trees, Buildings, NPCs, Particles, Water, Lighting, Grass, Rain
+// Systems: Terrain, Trees, Particles, Water, Lighting, Grass, Rain
 // ============================================================
 
 #include <glad/glad.h>
@@ -19,7 +19,6 @@
 #include "Camera.h"
 #include "NoiseMap.h"
 #include "TreeSystem.h"
-#include "BuildingSystem.h"
 #include "ParticleSystem.h"
 #include "WaterSystem.h"
 #include "GrassSystem.h"
@@ -230,7 +229,6 @@ int main() {
     Terrain       terrain(800, 800);
     TreeSystem    treeSystem(noiseData, HM_W, HM_H, 800, 800);
     GrassSystem   grassSystem(noiseData, HM_W, HM_H, 800, 800);
-    BuildingSystem buildingSystem;
     ParticleSystem particleSystem(500, noiseData, HM_W, HM_H, 800.0f, 800.0f);
     WaterSystem   waterSystem(2000, 2000);
     LightingSystem lightingSystem;
@@ -242,7 +240,6 @@ int main() {
     Shader terrainShader ("assets/shaders/terrain.vert",  "assets/shaders/terrain.frag");
     Shader treeShader    ("assets/shaders/tree.vert",     "assets/shaders/tree.frag");
     Shader grassShader   ("assets/shaders/grass.vert",    "assets/shaders/grass.frag");
-    Shader buildingShader("assets/shaders/building.vert", "assets/shaders/building.frag");
     Shader particleShader("assets/shaders/particle.vert", "assets/shaders/particle.frag");
     Shader waterShader   ("assets/shaders/water.vert",    "assets/shaders/water.frag");
     Shader skyboxShader  ("assets/shaders/skybox.vert",   "assets/shaders/skybox.frag");
@@ -289,7 +286,7 @@ int main() {
 
         // ============================================================
         // PASS 1: DEPTH PASS - Render from light's perspective
-        // (now includes trees, buildings for proper shadows)
+        // (includes terrain and trees)
         // ============================================================
         glm::mat4 lightProj = lightingSystem.GetLightProjection();
         glm::mat4 lightView = lightingSystem.GetLightView();
@@ -307,9 +304,6 @@ int main() {
 
         // Draw trees to depth map – they now cast shadows on the terrain!
         treeSystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader);
-
-        // Draw buildings to depth map
-        buildingSystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -341,7 +335,6 @@ int main() {
         setSceneUniforms(terrainShader);
         setSceneUniforms(treeShader);
         setSceneUniforms(grassShader);
-        setSceneUniforms(buildingShader);
         setSceneUniforms(waterShader);
 
         // --- Draw Terrain (with shadows) ---
@@ -373,10 +366,6 @@ int main() {
         treeShader.setFloat("u_Time",       currentFrame);
         treeShader.setFloat("windStrength", windStrength);
         treeSystem.Render(projection, view, skyColor, treeShader);
-
-        // --- Draw Buildings ---
-        buildingSystem.Render(projection, view, skyColor, buildingShader);
-
 
         // --- Draw Water ---
         waterShader.use();
