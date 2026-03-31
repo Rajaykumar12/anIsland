@@ -7,7 +7,7 @@ class Shader;
 // Toggleable rain effect: 5000 falling GL_POINTS rendered with additive blending
 class RainSystem {
 public:
-    explicit RainSystem(int maxDrops = 5000);
+    explicit RainSystem(int maxDrops = 5000000);
     ~RainSystem();
 
     void Update(float deltaTime, const glm::vec3& cameraPos);

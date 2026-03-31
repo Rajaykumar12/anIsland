@@ -228,12 +228,15 @@ int main() {
     // ---- 4. Initialize Systems ----
     Terrain       terrain(800, 800);
     TreeSystem    treeSystem(noiseData, HM_W, HM_H, 800, 800);
+    std::cout << "[DEBUG] TreeSystem initialized. Total trees: " << treeSystem.GetTotalTreeCount() << std::endl;
     GrassSystem   grassSystem(noiseData, HM_W, HM_H, 800, 800);
     ParticleSystem particleSystem(500, noiseData, HM_W, HM_H, 800.0f, 800.0f);
     WaterSystem   waterSystem(2000, 2000);
     LightingSystem lightingSystem;
-    RainSystem    rainSystem(5000);
-    SplashSystem  splashSystem(200, noiseData, HM_W, HM_H, 800.0f, 800.0f);
+    RainSystem    rainSystem(1000000);
+    std::cout << "[DEBUG] RainSystem initialized with max drops: 500000" << std::endl;
+    SplashSystem  splashSystem(200000, noiseData, HM_W, HM_H, 800.0f, 800.0f);
+    std::cout << "[DEBUG] SplashSystem initialized with max splashes: 200000" << std::endl;
     g_rainSystem = &rainSystem;
 
     // ---- 5. Load Shaders ----
@@ -246,6 +249,9 @@ int main() {
     Shader rainShader    ("assets/shaders/rain.vert",     "assets/shaders/rain.frag");
     Shader splashShader  ("assets/shaders/splash.vert",   "assets/shaders/splash.frag");
     Shader depthShader   ("assets/shaders/depth.vert",    "assets/shaders/depth.frag");
+    
+    std::cout << "[DEBUG] All shaders loaded successfully" << std::endl;
+    std::cout << "[DEBUG] Rain enabled: " << rainSystem.IsEnabled() << std::endl;
 
     // Tell terrain shader which texture unit holds the heightmap
     terrainShader.use();
@@ -365,7 +371,10 @@ int main() {
         treeShader.use();
         treeShader.setFloat("u_Time",       currentFrame);
         treeShader.setFloat("windStrength", windStrength);
-        treeSystem.Render(projection, view, skyColor, treeShader);
+        int treeCount = treeSystem.GetTotalTreeCount();
+        if (treeCount > 0) {
+            treeSystem.Render(projection, view, skyColor, treeShader);
+        }
 
         // --- Draw Water ---
         waterShader.use();
