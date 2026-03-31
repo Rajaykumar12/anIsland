@@ -18,7 +18,8 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 - Aligns each blade to local terrain normal via computed tangent/bitangent basis for slope-following orientation
 - Wind animation: sinusoidal sway with quadratic falloff from blade base, clamped height factor [0,1] for stability
 - Filters: excludes underwater (Y < 2.0), extreme slopes (> 55°), and terrain shadow regions
-- Each blade is a simple quad (2 triangles); 1.4 unit spacing creates natural density
+- Each blade is a tapered quad (2 triangles), tuned for finer and shorter appearance (baseWidth 0.09, tipWidth 0.018, height 0.62)
+- Placement uses 0.68 world-unit spacing with dense 6-8 blade clumps per sample point for high-volume fields
 - Uses efficient instanced rendering (single draw call)
 - Dependencies: heightmap (512×512), terrain size (800×800)
 
@@ -50,7 +51,7 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 - Uses procedural sine wave displacement for wave simulation
 - Implements height-based color blending (deep blue to shallow cyan)
 
-#### 9. **Legacy Systems (Disabled in active main loop)**
+#### **Legacy Systems (Disabled in active main loop)**
 - **NPCSystem** (`include/NPCSystem.h`, `src/NPCSystem.cpp`) is present in the codebase but not instantiated/rendered in `main_new.cpp`
 - **ColonySystem** (`include/ColonySystem.h`, `src/ColonySystem.cpp`) is present in the codebase but not instantiated/rendered in `main_new.cpp`
 
@@ -71,6 +72,12 @@ This project has been refactored from a monolithic `main.cpp` into a modular sys
 - **Day Speed**: 0.1f (one full day = ~63 seconds)
 - **Shadow Mapping**: Manages depth FBO (2048×2048), depth texture, light matrices
 - **Fog Integration**: Provides dynamic fog color tied to day/night cycle
+
+#### 10. **CinematicCamera** (`include/CinematicCamera.h`, `src/CinematicCamera.cpp`)
+- Extends Camera with a scripted 14-shot cinematic sequence (525 seconds total)
+- Keeps camera 3+ units above terrain using bilinear height sampling and forward collision checks
+- Synchronizes shot progression with day/night transitions in the main loop
+- Mid-sequence rebalanced framing includes broader wide shots and a direct sunrise callback shot
 
 ### Supporting Systems (Existing)
 
@@ -169,6 +176,9 @@ make
 - **ESC** - Exit
 - **F** - Toggle wireframe mode
 - **R** - Toggle rain
+- **C** - Toggle cinematic mode
+- **SPACE** - Pause/resume cinematic
+- **BACKSPACE** - Reset cinematic timeline
 
 ### Key Features
 
@@ -181,6 +191,7 @@ make
 ✅ **Dynamic Water + Shoreline** - Procedural waves with irregular coast and beach transition
 ✅ **Terrain Instancing** - 15,000 trees, 16 buildings, and dense mountain grass rendered efficiently
 ✅ **Two-Pass Rendering** - Depth pass (light space) + Color pass (camera space with shadows)
+✅ **Cinematic Sequence** - 14 timed shots (8:45) with terrain-safe camera movement and synchronized lighting progression
 
 ### Rendering Pipeline
 

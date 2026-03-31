@@ -11,6 +11,8 @@ constexpr float TERRAIN_MAX_HEIGHT = 150.0f;
 constexpr float WATERLINE_MIN_HEIGHT = 2.0f;
 constexpr float MAX_GRASS_HEIGHT = 120.0f;
 constexpr float MAX_SLOPE_DEG = 55.0f;
+constexpr float GRASS_JITTER_PRIMARY = 0.45f;
+constexpr float GRASS_JITTER_CLUMP = 0.65f;
 }
 
 GrassSystem::GrassSystem(const std::vector<float>& heightmap, int hmWidth, int hmHeight,
@@ -63,24 +65,24 @@ GrassSystem::~GrassSystem() {
 }
 
 void GrassSystem::generateGrassGeometry() {
-    // Create a simple grass blade (two triangles forming a quad)
-    // Each blade is small and positioned locally
+    // Create a tapered grass blade to read finer at distance.
     
     // Blade dimensions
-    float width = 0.15f;
-    float height = 0.6f;
+    float baseWidth = 0.09f;
+    float tipWidth = 0.018f;
+    float height = 0.62f;
     
     // First triangle (left side of blade)
     bladeVertices = {
         // Left triangle
-        -width/2, 0.0f, 0.0f,
-        -width/2, height, 0.0f,
-         width/2, height, 0.0f,
+        -baseWidth / 2, 0.0f, 0.0f,
+        -tipWidth / 2, height, 0.0f,
+         tipWidth / 2, height, 0.0f,
         
         // Right triangle
-        -width/2, 0.0f, 0.0f,
-         width/2, height, 0.0f,
-         width/2, 0.0f, 0.0f,
+        -baseWidth / 2, 0.0f, 0.0f,
+         tipWidth / 2, height, 0.0f,
+         baseWidth / 2, 0.0f, 0.0f,
     };
 }
 
@@ -89,8 +91,8 @@ void GrassSystem::generateGrassInstances(const std::vector<float>& heightmap,
                                          float terrainSizeX, float terrainSizeZ) {
     instances.clear();
     
-    // Increase density for fuller mountain vegetation
-    float bladeSpacing = 1.4f;
+    // Keep blades densely packed for fuller meadows.
+    float bladeSpacing = 0.68f;
     
     // Calculate heightmap to world conversion
     float hmToWorldX = terrainSizeX / hmWidth;
@@ -140,14 +142,30 @@ void GrassSystem::generateGrassInstances(const std::vector<float>& heightmap,
             }
 
             if (!isSteep) {
-                // Add some randomness to avoid grid pattern
-                float randomOffsetX = ((float)rand() / RAND_MAX - 0.5f) * 0.8f;
-                float randomOffsetZ = ((float)rand() / RAND_MAX - 0.5f) * 0.8f;
+                auto rand01 = []() {
+                    return static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+                };
 
-                GrassInstance instance;
-                instance.offset = glm::vec3(x + randomOffsetX, worldHeight, z + randomOffsetZ);
-                instance.normal = slopeNormal;
-                instances.push_back(instance);
+                // Spawn dense clumps (6-8 blades) to increase perceived volume.
+                int clumpCount = 6;
+                if (rand01() < 0.65f) {
+                    clumpCount++;
+                }
+                if (rand01() < 0.35f) {
+                    clumpCount++;
+                }
+
+                for (int i = 0; i < clumpCount; ++i) {
+                    float jitterRange = (i == 0) ? GRASS_JITTER_PRIMARY : GRASS_JITTER_CLUMP;
+                    GrassInstance instance;
+                    instance.offset = glm::vec3(
+                        x + (rand01() - 0.5f) * jitterRange,
+                        worldHeight,
+                        z + (rand01() - 0.5f) * jitterRange
+                    );
+                    instance.normal = slopeNormal;
+                    instances.push_back(instance);
+                }
             }
         }
     }

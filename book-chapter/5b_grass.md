@@ -4,41 +4,40 @@
 
 Rendering realistic grass requires thousands of individual blades across terrain. Naive approaches become prohibitively expensive:
 
-- **Single blade as separate object:** 400,000 blades × 1 draw call = 400,000+ draw calls (unusable) ❌
-- **Instanced blades:** 400,000 blades in single draw call with instancing ✓
+- **Single blade as separate object:** millions of blades × 1 draw call = millions of draw calls (unusable) ❌
+- **Instanced blades:** millions of blades in one draw call with instancing ✓
 
 The grass system deploys procedural blade generation with terrain-normal alignment, creating the visual impression of grass following terrain contours naturally.
 
 ### Expected Blade Density
 
-With 1.4-unit spacing between blades across 800×800 terrain:
+With 0.68-unit spacing between blade sample points across 800×800 terrain:
 
-$$\text{Blade Count} = \left(\frac{800}{1.4}\right)^2 \approx 326,000 \text{ blades}$$
+$$\text{Sample Points} = \left(\frac{800}{0.68}\right)^2 \approx 1,384,000$$
 
-With randomization and filtering, actual count reaches ~407,000 blades in deployed scene.
+Each valid sample spawns a clump of 6-8 blades. After filtering (waterline, max height, slope), final deployed count is in the multi-million range (typically 5,000,000+).
 
 ## 5b.2 Blade Geometry
 
-Each grass blade is a simple quad primitive, centered at origin and ready for transformation:
+Each grass blade is a tapered two-triangle primitive, centered at origin and ready for transformation:
 
 ```
-Blade Quad:
-  (-0.075, 0.6) ─────────── (0.075, 0.6)
+Tapered Blade:
+    (-0.009, 0.62) ─────────── (0.009, 0.62)
          │                        │
-         │  0.15 units wide       │
-         │     0.6 tall           │
+         │  0.09 base width       │
+         │    0.62 units tall     │
          │                        │
-  (-0.075, 0.0) ─────────── (0.075, 0.0)
+    (-0.045, 0.0) ─────────── (0.045, 0.0)
 ```
 
 **Blade Dimensions:**
-- Height: 0.6 world units (vertical extent in local space)
-- Width: 0.15 world units (perpendicular to blade axis)
-- Geometry: Single quad (4 vertices, 6 indices for 2 triangles)
+- Height: 0.62 world units (vertical extent in local space)
+- Width: 0.09 at base, tapered to 0.018 at tip
+- Geometry: Tapered two-triangle blade (6 vertices)
 - Per-blade data: offset (world position), normal (terrain surface normal)
 
-**Efficiency:** With 407,000 blades, total vertex count = 407k × 4 = **1.6M vertices**. Instancing reduces this from 407k draw calls to **1 draw call** (see Chapter 5 for instancing details). The quad geometry is trivial to generate and upload—the challenge is *placement* and *alignment*, not geometry complexity.
-```
+**Efficiency:** With 5,000,000+ blades, total vertex workload is 5M × 6 = **30M+ vertices** in one instanced draw call. Instancing reduces this from millions of draw calls to **1 draw call** (see Chapter 5 for instancing details). The blade geometry remains simple; the challenge is *placement density* and *alignment*.
 
 ## 5b.3 Terrain-Normal-Aligned Blade Orientation
 
@@ -126,7 +125,7 @@ $$\text{sway}(t, h) = A(w) \cdot \sin(\omega(w) \cdot t + \phi(\vec{p})) \cdot m
 where:
 - $A(w) = 0.05 + 0.15w$ — Amplitude ranges 0.05-0.20 units
 - $\omega(w) = 2 + 2w$ — Frequency 2-4 rad/s
-- $m(h) = \text{clamp}(\frac{h}{0.6}, 0, 1)$ — Height factor [0, 1] from base to tip
+- $m(h) = \text{clamp}(\frac{h}{0.62}, 0, 1)$ — Height factor [0, 1] from base to tip
 - **Quadratic exponent** $m(h)^2$ — Ensures roots fixed, tips free
 
 **Design Rationale:** Rooted grass (base fixed to terrain) cannot sway at the attachment point. Quadratic falloff $m^2$ more accurately captures this physical constraint than linear falloff. Tips of tall blades can swing up to $A$ units, but root zones remain nearly stationary.
@@ -136,7 +135,7 @@ where:
 ```
 VERTEX_SHADER_GRASS_WIND(bladeVertex, grassInstance, windParams):
     // Compute normalized height from base (0) to tip (1)
-    heightFactor ← clamp(bladeVertex.y / 0.6, 0, 1)
+    heightFactor ← clamp(bladeVertex.y / 0.62, 0, 1)
     
     // Quadratic falloff: tips sway more than base
     swayFactor ← heightFactor × heightFactor  // ← Quadratic!
@@ -168,7 +167,7 @@ Blades must cover terrain uniformly while respecting environmental constraints. 
 GENERATE_GRASS_BLADES(terrain, heightmap, targetCount):
     instances ← Empty
     
-    SPACING ← 1.4  // Distance between blade attempts
+    SPACING ← 0.68  // Distance between placement samples
     WATER_LEVEL ← -1.5
     MAX_HEIGHT ← 120.0
     MAX_SLOPE_DEG ← 55.0
@@ -194,16 +193,20 @@ GENERATE_GRASS_BLADES(terrain, heightmap, targetCount):
             IF slopeAngle > MAX_SLOPE_DEG:
                 CONTINUE  // Skip grass on steep cliffs
             
-            // Constraint 3: Density filter (optional)
-            // Place blades with spatial clustering to avoid gaps
-            nearbyCount ← CountInstancesWithin(1.0)
-            IF nearbyCount > MAX_NEARBY:
-                CONTINUE  // Skip if too crowded locally
-            
-            // Acceptance: add blade
-            instance.offset ← [jx, height, jz]
-            instance.normal ← normal
-            instances.Push(instance)
+            // Dense clumped placement: 6-8 blades per accepted sample
+            clumpCount ← 6
+            IF RandomFloat(0,1) < 0.65: clumpCount ← clumpCount + 1
+            IF RandomFloat(0,1) < 0.35: clumpCount ← clumpCount + 1
+
+            FOR i ← 0 TO clumpCount-1:
+                jitterRange ← (i == 0) ? 0.45 : 0.65
+                instance.offset ← [
+                    x + RandomFloat(-0.5, 0.5) × jitterRange,
+                    height,
+                    z + RandomFloat(-0.5, 0.5) × jitterRange
+                ]
+                instance.normal ← normal
+                instances.Push(instance)
     
     RETURN instances
 ```
@@ -214,7 +217,7 @@ GENERATE_GRASS_BLADES(terrain, heightmap, targetCount):
 - **Slope limit:** Steep slopes (>55°) cause grass to clip terrain; rejected
 - **Spatial density:** Prevents over-crowding in flat regions (optional, improves visual uniformity)
 
-**Complexity:** O($\frac{800 \times 800}{1.4^2}$) = O(~326k) placements attempted, with ~80% acceptance rate → ~260-300k final blades. Single pass, no sorting needed.
+**Complexity:** O($\frac{800 \times 800}{0.68^2}$) = O(~1.38M) placement samples attempted. Final blade count scales by clump multiplier and filtering, producing multi-million blades in a single pass.
             }
             
             // Constraint 2: Slope filtering (no grass on steep slopes)
@@ -302,27 +305,16 @@ void GrassSystem::UpdateWind(float currentTime) {
 
 ## 5b.6 Dense Instanced Rendering
 
-Finally, all 407,000+ grass blades render in a single efficient call:
+Finally, all grass blades (multi-million instances) render in a single efficient call:
 
 ```cpp
-void GrassSystem::Render(const Shader& grassShader) {
-    grassShader.use();
+void GrassSystem::Draw() const {
+    if (instanceCount == 0) return;
+
+    glBindVertexArray(VAO);
     
-    // Set up uniforms
-    grassShader.setMat4("u_View", viewMatrix);
-    grassShader.setMat4("u_Projection", projectionMatrix);
-    grassShader.setFloat("u_Time", currentTime);
-    grassShader.setFloat("u_WindStrength", windStrength);
-    
-    glBindVertexArray(bladeVAO);
-    
-    // Single draw call for all 407,000+ blades!
-    glDrawElementsInstanced(GL_TRIANGLES,
-                           6,           // Indices per blade (1 quad = 2 triangles = 6 indices)
-                           GL_UNSIGNED_INT,
-                           nullptr,
-                           instances.size()  // Number of instances
-    );
+    // Single draw call for all blade instances
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, instanceCount);
     
     glBindVertexArray(0);
 }
@@ -335,19 +327,19 @@ void GrassSystem::Render(const Shader& grassShader) {
 | Blade mesh setup | ~0.1 ms (one-time) |
 | Instance data generation | ~50 ms (one-time) |
 | Instance buffer upload | ~5 ms (one-time) |
-| Per-frame rendering | **1.2-1.5 ms** |
-| GPU memory | ~25 MB (407k instances × 24 bytes) |
+| Per-frame rendering | scene-dependent (instance-count bound) |
+| GPU memory | scales with instance count (24 bytes per instance) |
 
 ---
 
 ## Summary
 
-The grass system demonstrates advanced GPU instancing combined with terrain-aware geometry alignment. By computing surface normals from the heightmap and constructing a TBN frame per blade, grass achieves seamless integration with varying terrain slopes. Efficient constraint filtering prevents visual artifacts while maintaining dense visual coverage. The combination of these techniques enables rendering 407,000+ individual blades in under 2 milliseconds per frame.
+The grass system demonstrates advanced GPU instancing combined with terrain-aware geometry alignment. By computing surface normals from the heightmap and constructing a TBN frame per blade, grass achieves seamless integration with varying terrain slopes. Efficient constraint filtering and clumped placement create dense meadow coverage while preserving real-time rendering.
 
 **Key Achievements:**
-- 407,000+ grass blades instanced in single draw call
+- 5,000,000+ grass blades instanced in a single draw call
 - Terrain-normal alignment via TBN frame construction
 - Wind animation with physical falloff (tips sway more than base)
 - Constraint filtering (no grass on water, steep slopes)
 - Per-blade randomization for natural appearance
-- Rendering: 1 draw call, ~1.5 ms per frame, 407,000 instances
+- Rendering: 1 draw call with multi-million instances (hardware-dependent frame cost)

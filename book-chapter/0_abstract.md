@@ -12,7 +12,7 @@ The implementation showcases the following significant achievements:
 
 - **Efficient Instanced Rendering:** Rendering of 15,000 procedurally placed trees with realistic wind animation in a single draw call per tree type, achieving sub-millisecond performance through GPU instancing with vertex attribute divisors.
 
-- **Dense Vegetation Coverage:** Deployment of 407,000+ grass blades with terrain-normal alignment and wind animation, rendered via GPU instancing with terrain-aware filtering and slope constraints, maintaining real-time frame rates.
+- **Dense Vegetation Coverage:** Deployment of 5,000,000+ fine grass blades using dense clumped instancing with terrain-normal alignment and wind animation, rendered via GPU instancing with terrain-aware filtering and slope constraints while maintaining real-time frame rates.
 
 - **Environmental Simulation:** Complete environmental systems including procedural ocean waves, particle systems for firefly simulation constrained to forest elevation bands, dynamic rain with terrain-aware splash impacts, and a day/night lighting cycle with PCF-filtered directional shadows.
 
@@ -26,7 +26,7 @@ The implementation showcases the following significant achievements:
 |--------|---------------|
 | **Terrain Size** | 800×800 vertices, 637,401 triangles |
 | **Heightmap Resolution** | 512×512 Perlin noise texture |
-| **Instanced Objects** | 15,000+ trees (4 types), 407,000+ grass blades |
+| **Instanced Objects** | 15,000+ trees (4 types), 5,000,000+ grass blades |
 | **Particles** | 500 fireflies + 5,000 rain drops + 200 splash effects |
 | **Shadow Map** | 2048×2048 depth texture, PCF 3×3 kernel |
 | **Day/Night Cycle** | 63 seconds per complete orbit |

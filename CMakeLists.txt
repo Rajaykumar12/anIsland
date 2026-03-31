@@ -14,6 +14,7 @@ set(SOURCES
     main_new.cpp          # Refactored main with modular systems
     src/Terrain.cpp
     src/Camera.cpp
+    src/CinematicCamera.cpp
     src/NoiseMap.cpp
     src/Shader.cpp
     src/TreeSystem.cpp

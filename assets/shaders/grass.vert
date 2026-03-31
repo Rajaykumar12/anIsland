@@ -25,7 +25,7 @@ void main()
     vec3 localPos = tangent * aPos.x + up * aPos.y + bitangent * aPos.z;
 
     // Wind sway: top of grass blade moves more
-    float heightFactor = clamp(localPos.y / 0.6, 0.0, 1.0); // normalize to 0-1
+    float heightFactor = clamp(localPos.y / 0.62, 0.0, 1.0); // normalize to 0-1
     float A = 0.05 + windStrength * 0.15;
     float omega = 2.0 + windStrength * 2.0;
 

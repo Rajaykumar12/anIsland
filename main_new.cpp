@@ -1,6 +1,7 @@
 // ============================================================
 // OpenGL Terrain Visualization - Modular Architecture
 // Systems: Terrain, Trees, Particles, Water, Lighting, Grass, Rain
+// Cinematic Scene: "The Island - A Day's Journey" - ~9 minute unbroken sequence
 // ============================================================
 
 #include <glad/glad.h>
@@ -17,6 +18,7 @@
 #include "Terrain.h"
 #include "Shader.h"
 #include "Camera.h"
+#include "CinematicCamera.h"
 #include "NoiseMap.h"
 #include "TreeSystem.h"
 #include "ParticleSystem.h"
@@ -31,7 +33,8 @@ const unsigned int SCR_WIDTH  = 1280;
 const unsigned int SCR_HEIGHT = 720;
 
 // ---- Global camera (used in callbacks) ----
-Camera camera(glm::vec3(125.0f, 200.0f, 175.0f));
+// Using CinematicCamera for terrain-following and scripted shots
+CinematicCamera* g_camera = nullptr;
 float lastX      = SCR_WIDTH  / 2.0f;
 float lastY      = SCR_HEIGHT / 2.0f;
 bool  firstMouse = true;
@@ -39,6 +42,22 @@ bool  firstMouse = true;
 // ---- Timing ----
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
+
+// ---- Cinematic mode ----
+bool g_cinematicMode = false;
+float g_cinematicTime = 0.0f;
+const float CINEMATIC_DURATION = 525.0f; // ~8.75 minutes for full day cycle
+bool g_cinematicPaused = false;
+
+// ---- Time control for dawn sequence ----
+// The scene starts at pre-dawn (time ~0.05) and progresses through the day
+float g_sceneTimeOfDay = 0.05f;  // Start pre-dawn
+const float SCENE_DAY_START = 0.05f;   // Pre-dawn
+const float SCENE_DAY_END = 0.85f;     // Late evening
+
+// Rain system forward reference for key callback
+RainSystem* g_rainSystem = nullptr;
+bool g_rainEnabled = false;
 
 // -------------------------------------------------------
 // GLFW Callbacks
@@ -48,6 +67,8 @@ void framebuffer_size_callback(GLFWwindow* /*win*/, int width, int height) {
 }
 
 void mouse_callback(GLFWwindow* /*win*/, double xposIn, double yposIn) {
+    if (!g_camera || !g_camera->IsUserControlEnabled()) return;
+
     float xpos = static_cast<float>(xposIn);
     float ypos = static_cast<float>(yposIn);
 
@@ -62,27 +83,39 @@ void mouse_callback(GLFWwindow* /*win*/, double xposIn, double yposIn) {
     lastX = xpos;
     lastY = ypos;
 
-    camera.ProcessMouseMovement(xoffset, yoffset);
+    g_camera->ProcessMouseMovement(xoffset, yoffset);
 }
 
 void scroll_callback(GLFWwindow* /*win*/, double /*xoffset*/, double yoffset) {
-    camera.ProcessMouseScroll(static_cast<float>(yoffset));
+    if (g_camera) {
+        g_camera->ProcessMouseScroll(static_cast<float>(yoffset));
+    }
 }
 
-// Rain system forward reference for key callback
-RainSystem* g_rainSystem = nullptr;
-bool g_rainEnabled = false;
-
 void processInput(GLFWwindow* window) {
+    if (!g_camera) return;
+
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.ProcessKeyboard(FORWARD,  deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.ProcessKeyboard(LEFT,     deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.ProcessKeyboard(RIGHT,    deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) camera.ProcessKeyboard(UP,       deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) camera.ProcessKeyboard(DOWN,     deltaTime);
+    // Camera movement only in non-cinematic or user control mode
+    if (g_camera->IsUserControlEnabled()) {
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) g_camera->ProcessKeyboard(FORWARD,  deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) g_camera->ProcessKeyboard(BACKWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) g_camera->ProcessKeyboard(LEFT,     deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) g_camera->ProcessKeyboard(RIGHT,    deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) g_camera->ProcessKeyboard(UP,       deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) g_camera->ProcessKeyboard(DOWN,     deltaTime);
+
+        // Keyboard-look fallback for laptops where touchpad input is limited while typing.
+        const float lookSpeedDegPerSec = 95.0f;
+        const float lookDelta = lookSpeedDegPerSec * deltaTime;
+        const float mouseEquivalent = lookDelta / g_camera->MouseSensitivity;
+        if (glfwGetKey(window, GLFW_KEY_LEFT)  == GLFW_PRESS) g_camera->ProcessMouseMovement(-mouseEquivalent, 0.0f);
+        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) g_camera->ProcessMouseMovement( mouseEquivalent, 0.0f);
+        if (glfwGetKey(window, GLFW_KEY_UP)    == GLFW_PRESS) g_camera->ProcessMouseMovement(0.0f,  mouseEquivalent);
+        if (glfwGetKey(window, GLFW_KEY_DOWN)  == GLFW_PRESS) g_camera->ProcessMouseMovement(0.0f, -mouseEquivalent);
+    }
 
     // Toggle wireframe with F
     static bool wireframe = false;
@@ -102,6 +135,42 @@ void processInput(GLFWwindow* window) {
         g_rainEnabled = !g_rainEnabled;
     }
     rWasDown = rIsDown;
+
+    // Toggle cinematic mode with C
+    static bool cWasDown = false;
+    bool cIsDown = glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS;
+    if (cIsDown && !cWasDown) {
+        g_cinematicMode = !g_cinematicMode;
+        if (g_cinematicMode) {
+            g_cinematicTime = 0.0f;
+            g_sceneTimeOfDay = SCENE_DAY_START;
+            g_camera->StartCinematic();
+            std::cout << "[Scene] The Island at Dawn - Started" << std::endl;
+        } else {
+            g_camera->StopCinematic();
+            std::cout << "[Scene] Cinematic mode ended" << std::endl;
+        }
+    }
+    cWasDown = cIsDown;
+
+    // Pause cinematic with Space
+    static bool spaceWasDown = false;
+    bool spaceIsDown = glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS;
+    if (spaceIsDown && !spaceWasDown && g_cinematicMode) {
+        g_cinematicPaused = !g_cinematicPaused;
+        std::cout << "[Scene] " << (g_cinematicPaused ? "Paused" : "Resumed") << std::endl;
+    }
+    spaceWasDown = spaceIsDown;
+
+    // Reset cinematic with Backspace
+    static bool backspaceWasDown = false;
+    bool backspaceIsDown = glfwGetKey(window, GLFW_KEY_BACKSPACE) == GLFW_PRESS;
+    if (backspaceIsDown && !backspaceWasDown && g_cinematicMode) {
+        g_cinematicTime = 0.0f;
+        g_sceneTimeOfDay = SCENE_DAY_START;
+        std::cout << "[Scene] Reset to beginning" << std::endl;
+    }
+    backspaceWasDown = backspaceIsDown;
 }
 
 unsigned int createHeightmapTexture(const std::vector<float>& data, int width, int height) {
@@ -175,7 +244,7 @@ unsigned int createSkyboxCube() {
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), &vertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    
+
     return skyboxVAO;
 }
 
@@ -194,7 +263,8 @@ int main() {
 #endif
 
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT,
-                                          "Terrain Visualization", nullptr, nullptr);
+                                          "The Island at Dawn - Press C to start cinematic",
+                                          nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window\n";
         glfwTerminate();
@@ -213,6 +283,9 @@ int main() {
     glfwSetCursorPosCallback(window,       mouse_callback);
     glfwSetScrollCallback(window,          scroll_callback);
     glfwSetInputMode(window, GLFW_CURSOR,  GLFW_CURSOR_DISABLED);
+    if (glfwRawMouseMotionSupported()) {
+        glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+    }
 
     // ---- OpenGL state ----
     glEnable(GL_DEPTH_TEST);
@@ -239,6 +312,10 @@ int main() {
     std::cout << "[DEBUG] SplashSystem initialized with max splashes: 200000" << std::endl;
     g_rainSystem = &rainSystem;
 
+    // Initialize Cinematic Camera with terrain data for height-following
+    CinematicCamera cinematicCamera(noiseData, HM_W, HM_H, 800.0f, 800.0f);
+    g_camera = &cinematicCamera;
+
     // ---- 5. Load Shaders ----
     Shader terrainShader ("assets/shaders/terrain.vert",  "assets/shaders/terrain.frag");
     Shader treeShader    ("assets/shaders/tree.vert",     "assets/shaders/tree.frag");
@@ -249,7 +326,7 @@ int main() {
     Shader rainShader    ("assets/shaders/rain.vert",     "assets/shaders/rain.frag");
     Shader splashShader  ("assets/shaders/splash.vert",   "assets/shaders/splash.frag");
     Shader depthShader   ("assets/shaders/depth.vert",    "assets/shaders/depth.frag");
-    
+
     std::cout << "[DEBUG] All shaders loaded successfully" << std::endl;
     std::cout << "[DEBUG] Rain enabled: " << rainSystem.IsEnabled() << std::endl;
 
@@ -262,22 +339,101 @@ int main() {
 
     // ---- 6. Render Loop ----
     while (!glfwWindowShouldClose(window)) {
+        // Process pending input events first so mouse-look and keyboard movement
+        // are applied in the same frame.
+        glfwPollEvents();
+
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
+        // Cap delta time to avoid jumps
+        if (deltaTime > 0.1f) deltaTime = 0.1f;
+
         processInput(window);
 
-        // Update lighting/day-night cycle
-        lightingSystem.Update(currentFrame);
+        // -----------------------------------------------------------
+        // Cinematic Mode: Update camera and time-of-day
+        // -----------------------------------------------------------
+        if (g_cinematicMode && !g_cinematicPaused) {
+            // Update cinematic time
+            g_cinematicTime += deltaTime;
+
+            // Full day/night cycle progression (525 seconds)
+            // 0-60s: Night (stars visible)
+            // 60-120s: Dawn/Sunrise transition
+            // 120-300s: Full day
+            // 300-390s: Dusk/Sunset transition
+            // 390-525s: Night (moon and fireflies)
+            float timeProgress = g_cinematicTime / CINEMATIC_DURATION;
+            if (timeProgress > 1.0f) timeProgress = 1.0f;
+
+            // Map to full day cycle: 0.0=midnight, 0.25=dawn, 0.5=noon, 0.75=dusk, 1.0=midnight
+            if (timeProgress < 0.114f) {
+                // Night start (0.0 - 0.114) -> timeOfDay 0.0 - 0.1
+                g_sceneTimeOfDay = timeProgress / 0.114f * 0.1f;
+            } else if (timeProgress < 0.229f) {
+                // Dawn transition (0.114 - 0.229) -> timeOfDay 0.1 - 0.35
+                float t = (timeProgress - 0.114f) / 0.115f;
+                g_sceneTimeOfDay = 0.1f + t * 0.25f;
+            } else if (timeProgress < 0.571f) {
+                // Day (0.229 - 0.571) -> timeOfDay 0.35 - 0.65
+                float t = (timeProgress - 0.229f) / 0.342f;
+                g_sceneTimeOfDay = 0.35f + t * 0.3f;
+            } else if (timeProgress < 0.743f) {
+                // Dusk transition (0.571 - 0.743) -> timeOfDay 0.65 - 0.85
+                float t = (timeProgress - 0.571f) / 0.172f;
+                g_sceneTimeOfDay = 0.65f + t * 0.2f;
+            } else {
+                // Night end (0.743 - 1.0) -> timeOfDay 0.85 - 1.0 (back to midnight)
+                float t = (timeProgress - 0.743f) / 0.257f;
+                g_sceneTimeOfDay = 0.85f + t * 0.15f;
+            }
+
+            // Update camera
+            cinematicCamera.Update(g_cinematicTime, deltaTime);
+
+            // Show shot name periodically
+            static float lastShotDisplay = 0.0f;
+            if (g_cinematicTime - lastShotDisplay > 8.0f) {
+                std::cout << "[Scene] " << cinematicCamera.GetCurrentShotName()
+                          << " (Time: " << (int)g_cinematicTime << "s, Day: "
+                          << (int)(g_sceneTimeOfDay * 100) << "%)" << std::endl;
+                lastShotDisplay = g_cinematicTime;
+            }
+
+            // End cinematic after duration
+            if (g_cinematicTime >= CINEMATIC_DURATION) {
+                std::cout << "[Scene] The Island - A Day's Journey - Complete" << std::endl;
+                g_cinematicMode = false;
+                cinematicCamera.StopCinematic();
+            }
+        } else if (!g_cinematicMode) {
+            // Free camera mode - apply terrain collision
+            float terrainH = cinematicCamera.GetTerrainHeightClamped(
+                cinematicCamera.Position.x, cinematicCamera.Position.z);
+            float minHeight = terrainH + 2.0f;
+            if (cinematicCamera.Position.y < minHeight) {
+                cinematicCamera.Position.y = minHeight;
+            }
+        }
+
+        // Update lighting with controlled time of day
+        if (g_cinematicMode) {
+            // Override the lighting system's time with our scene time
+            // This creates the dawn-to-dusk progression
+            lightingSystem.Update(g_sceneTimeOfDay * 100.0f); // Scale to match expected range
+        } else {
+            lightingSystem.Update(currentFrame);
+        }
 
         // Compute dynamic wind strength (slow sine, 0->1)
         float windStrength = 0.5f + 0.5f * std::sin(currentFrame * 0.15f);
 
         // Update moving systems
         particleSystem.Update(deltaTime);
-        rainSystem.Update(deltaTime, camera.Position);
-        splashSystem.Update(deltaTime, g_rainEnabled, camera.Position);
+        rainSystem.Update(deltaTime, g_camera->Position);
+        splashSystem.Update(deltaTime, g_rainEnabled, g_camera->Position);
 
         // Retrieve lighting values once per frame
         glm::vec3 lightDir    = lightingSystem.GetLightDir();
@@ -308,7 +464,7 @@ int main() {
         // Draw terrain to depth map
         terrain.Draw();
 
-        // Draw trees to depth map – they now cast shadows on the terrain!
+        // Draw trees to depth map
         treeSystem.Render(lightProj, lightView, glm::vec3(0.0f), depthShader);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -324,8 +480,8 @@ int main() {
 
         // Calculate matrices
         float aspect = (currentHeight == 0) ? 1.0f : (float)currentWidth / (float)currentHeight;
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), aspect, 0.1f, 2000.0f);
-        glm::mat4 view  = camera.GetViewMatrix();
+        glm::mat4 projection = glm::perspective(glm::radians(g_camera->Zoom), aspect, 0.1f, 2000.0f);
+        glm::mat4 view  = g_camera->GetViewMatrix();
         glm::mat4 model = glm::mat4(1.0f);
 
         // --- Helper lambda: set common scene uniforms on a shader ---
@@ -335,7 +491,7 @@ int main() {
             sh.setVec3("lightDir",    lightDir);
             sh.setVec3("lightColor",  lightColor);
             sh.setVec3("sunsetTint",  sunsetTint);
-            sh.setVec3("cameraPos",   camera.Position);
+            sh.setVec3("cameraPos",   g_camera->Position);
         };
 
         setSceneUniforms(terrainShader);
@@ -381,12 +537,13 @@ int main() {
         waterShader.setVec3("lightDir",   lightDir);
         waterShader.setVec3("lightColor", lightColor);
         waterShader.setVec3("sunsetTint", sunsetTint);
-        waterShader.setVec3("cameraPos",  camera.Position);
+        waterShader.setVec3("cameraPos",  g_camera->Position);
         waterShader.setVec3("skyColor",   skyColor);
         waterSystem.Render(projection, view, waterShader, currentFrame,
                            lightingSystem.GetSunColor() * lightingSystem.GetSunIntensity());
 
         // --- Draw Firefly Particles (only at night) ---
+        // Fireflies appear as day transitions to night (cinematic shot 6-7)
         particleShader.use();
         particleShader.setFloat("dayIntensity", dayIntensity);
         particleSystem.Render(projection, view, particleShader);
@@ -411,7 +568,6 @@ int main() {
         glDepthFunc(GL_LESS);
 
         glfwSwapBuffers(window);
-        glfwPollEvents();
     }
 
     // ---- Cleanup ----
