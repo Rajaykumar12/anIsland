@@ -13,7 +13,7 @@ A modern C++ OpenGL application featuring a procedurally generated terrain with 
 
 ### Simulation Systems
 - **15,000 Instanced Trees** - Intelligent placement based on terrain height/slope with Phong lighting
-- **Procedural Grass** - Dense grass on mountain slopes with terrain-normal alignment, wind sway animation (quadratic falloff with stability clamping)
+- **Procedural Grass** - Ultra-dense, fine, shorter clumped grass on mountain slopes with terrain-normal alignment and wind sway animation (quadratic falloff with stability clamping)
 - **Dynamic Water + Coastline** - Procedural wave surface with irregular island shoreline and beach transition
 - **Town Grid** - 4×4 building blocks with illuminated windows in the terrain center
 - **Firefly Particles** - 500 glowing particles with terrain-sampled height, constrained to forest elevation bands (8–85 world units)
@@ -27,6 +27,7 @@ A modern C++ OpenGL application featuring a procedurally generated terrain with 
 
 ### Dynamic Features
 - **Interactive FPS Camera** - WASD movement, mouse look, vertical flight
+- **Cinematic Camera Mode** - Scripted 14-shot sequence with terrain-safe movement and day/night synchronized progression
 - **Wireframe Toggle** - Real-time visual debugging
 - **Optimized Rendering** - Instanced rendering for efficient batch processing
 - **Modern OpenGL** - OpenGL 3.3 Core Profile with VAO/VBO/shader architecture
@@ -96,6 +97,9 @@ make
 | **Q/E** | Move up/down (vertical flight) |
 | **Mouse** | Look around (captured) |
 | **F** | Toggle wireframe mode |
+| **C** | Toggle cinematic mode |
+| **SPACE** | Pause/resume cinematic |
+| **BACKSPACE** | Reset cinematic to start |
 | **ESC** | Exit application |
 
 ## Project Structure
@@ -145,9 +149,10 @@ This project uses a **modular system-based architecture** for maintainability an
 - **Tree System** - Renders 15,000 trees with intelligent placement
 - **Building System** - Creates town-center buildings in 4×4 grid
 - **Particle System** - Manages 500 forest-band firefly particles above terrain
-- **Grass System** - Generates dense, static, slope-aligned grass across mountain surfaces
+- **Grass System** - Generates ultra-dense, fine, shorter, slope-aligned clumped grass across mountain surfaces
 - **Water System** - Creates dynamic water surface with wave displacement
 - **Rain System** - Rain particle simulation
+- **Cinematic Camera** - 14-shot terrain-aware guided sequence synchronized with day/night progression
 
 ### Rendering Pipeline
 
@@ -188,6 +193,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation of all systems
 - **Camera Position** - Default spawn: (125, 200, 175) above town center
 - **Terrain Size** - 800×800 vertices spanning 800×800 world units
 - **Day Speed** - One full day/night cycle ≈ 63 seconds
+- **Cinematic Runtime** - Full sequence length: 8:45 (525 seconds)
 
 ## Troubleshooting
 

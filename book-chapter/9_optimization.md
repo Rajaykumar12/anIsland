@@ -18,14 +18,14 @@
 | System | Instance Count | Memory | Instance Data |
 |--------|---|---|---|
 | Trees | 15,000 | ~480 KB | position, rotation, scale |
-| Grass | 407,000 | ~13 MB | position, normal |
+| Grass | 5,000,000+ | 120 MB+ | position, normal |
 | Buildings | 16 | <1 KB | position, scale, color |
 | Particles (fireflies) | 500 | ~16 KB | position, velocity |
 | Rain | 5,000 | ~160 KB | position, velocity (dynamic) |
 | Splashes | 200 | ~6.4 KB | position, lifetime (dynamic) |
-| **Total** | **~428k** | **~14 MB** | — |
+| **Total** | **5M+** | **120 MB+** | — |
 
-**Memory Cost:** 14 MB is negligible on modern GPUs (1-2 GB VRAM typical). Trade-off is **14 MB storage for 15,000× CPU speedup**—excellent utilization.
+**Memory Cost:** The denser grass configuration significantly increases memory footprint, but remains practical on modern desktop GPUs. The trade-off is higher memory use for substantially richer vegetation coverage and preserved draw-call efficiency.
 
 ## 9.2 Buffer Management and Memory Hierarchy
 
@@ -139,7 +139,7 @@ Modern GPUs have multi-level caches optimized for spatial/temporal locality:
 ```
 INITIALIZE_GRASS_HEIGHTS(heightmap):
     // One-time: Sample heightmap and cache indices
-    FOR i ← 0 TO 407,000 grass blades:
+    FOR i ← 0 TO 5,000,000 grass blades:
         (x, z) ← grassPosition[i]
         heightIndex ← ComputeHeightmapIndex(x, z)
         
@@ -150,7 +150,7 @@ INITIALIZE_GRASS_HEIGHTS(heightmap):
     heightmapCache ← NEW LRU_Cache(size=1000)
 
 RENDER_GRASS():
-    FOR i ← 0 TO 407,000:
+    FOR i ← 0 TO 5,000,000:
         // Fast array lookup vs. texture sampling
         heightIndex ← cachedHeightIndices[i]
         
@@ -168,12 +168,12 @@ RENDER_GRASS():
 
 | Access Pattern | Latency | Bandwidth | Hits/Frame |
 |---|---|---|---|
-| Texture sampling (miss) | ~150 cycles | 1 sample per warp | 407k |
-| Array lookup (L1 hit) | ~4 cycles | 32 samples per warp | 407k |
+| Texture sampling (miss) | ~150 cycles | 1 sample per warp | 5M+ |
+| Array lookup (L1 hit) | ~4 cycles | 32 samples per warp | 5M+ |
 | CPU cache (L3, hit) | ~20 cycles | — | Amortized |
 | **Speedup:** | ~40×–50× | — | — |
 
-**Cost:** 407k floats × 4 bytes = ~1.6 MB CPU cache. GPU VRAM is order-of-magnitude larger; this is negligible.
+**Cost:** At multi-million blade counts, cached arrays and instance buffers scale proportionally and should be budgeted explicitly in VRAM planning.
 
 **Takeaway:** Caching transforms O(VRAM latency) per blade → O(cache latency) per blade. This is a **10-50× improvement** for memory-bound workloads.
 
@@ -205,7 +205,7 @@ RENDER PHASE (12-13 ms, 76-82%):
   ├─ Terrain shading: 1.5 ms
   ├─ Water surface:   0.8 ms (procedural wave calculation)
   ├─ Trees:           1.2 ms
-  ├─ Grass:           1.5 ms (407k instances)
+    ├─ Grass:           instance-count dependent (multi-million instances)
   ├─ Fireflies:       0.7 ms (GL_POINTS, glow effect)
   ├─ Rain:            0.4 ms (5k particles)
   ├─ Splashes:        0.3 ms (200 particles)
@@ -215,7 +215,7 @@ RENDER PHASE (12-13 ms, 76-82%):
 AVAILABLE HEADROOM: 2.67 ms (16% spare budget)
 ```
 
-**Critical Path Analysis:** Grass rendering dominates the color pass (15% of frame time) due to instance count (407k). Micro-optimizations (shader complexity, texture filtering) have limited impact. Further optimization requires:
+**Critical Path Analysis:** Grass rendering remains a primary color-pass cost due to multi-million instance counts. Micro-optimizations (shader complexity, texture filtering) have limited impact. Further optimization requires:
 - Reducing blade count (LOD systems)
 - Early-out culling (frustum/occlusion)
 - Compute shader preprocessing (off-screen, pre-frame)
@@ -235,8 +235,8 @@ AVAILABLE HEADROOM: 2.67 ms (16% spare budget)
 | **Terrain** | 400×400 | 800×800 | 1024×1024 | 0.6 MB to 4 MB |
 | **Shadow Map** | 512×512 | 2048×2048 | 4096×4096 | 1 MB to 64 MB |
 | **Trees** | 5,000 | 15,000 | 25,000 | 0.15 MB to 0.8 MB |
-| **Grass Spacing** | 2.5 units | 1.4 units | 0.8 units | 6 KB to 50 MB |
-| **Expected Blades** | ~65k | ~407k | ~1M | ~2 MB to ~32 MB |
+| **Grass Spacing** | 2.5 units | 0.68 units | 0.5 units | 6 KB to 300 MB+ |
+| **Expected Blades** | ~65k | 5M+ | 8M+ | ~2 MB to 300 MB+ |
 | **Particles (Fireflies)** | 200 | 500 | 1000 | 6 KB to 32 KB |
 | **Rain Drops** | 2,000 | 5,000 | 10,000 | 64 KB to 320 KB |
 | **Splashes Max** | 100 | 200 | 500 | 3 KB to 16 KB |
@@ -257,7 +257,7 @@ where $\alpha, \beta, \gamma$ are empirical constants:
 | Config | Terrain | Grass | Particles | Predicted Time | Measured |
 |---|---:|---:|---:|---:|---:|
 | Mobile | 160k | 65k | 2.2k | ~11.2 ms | 11 ms |
-| Recommended | 640k | 407k | 5.5k | ~14.1 ms | 14 ms |
+| Recommended | 640k | 5M+ | 5.5k | scene-dependent | scene-dependent |
 | Enthusiast | 1.05M | 1M | 11k | ~17.3 ms | 18 ms |
 
 **Validation:** Model captures 92-95% accuracy across configs. Remaining variance due to CPU-GPU synchronization variance and cache effects.

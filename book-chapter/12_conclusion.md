@@ -13,7 +13,7 @@ This work presents a comprehensive exploration of real-time rendering techniques
 
 **2. GPU Instancing as an Optimization Paradigm**
 - Applied instancing to vegetation rendering, achieving **12× performance improvement**
-- Rendered 15,000 trees and 400,000 grass blades efficiently in single draw calls
+- Rendered 15,000 trees and 5,000,000+ grass blades efficiently in single draw calls
 - Extended instancing to architectural structures, demonstrating broad applicability
 
 **3. Terrain-Aware Object Placement**
@@ -65,7 +65,7 @@ The project demonstrates mastery of several interconnected domains:
 
 ### 1. Instancing as a Fundamental Abstraction
 
-GPU instancing transcends optimization—it represents a fundamental abstraction for rendering repetitive geometry. The ordering-of-magnitude performance improvement makes previously intractable problems (rendering 400,000 grass blades) tractable with single draw calls.
+GPU instancing transcends optimization—it represents a fundamental abstraction for rendering repetitive geometry. The ordering-of-magnitude performance improvement makes previously intractable problems (rendering multi-million grass blades) tractable with single draw calls.
 
 **Lesson:** Modern GPU programming should identify instancing opportunities early. Ask: "Can this be expressed as N copies of base geometry with variation?" If yes, instancing applies.
 
@@ -253,7 +253,7 @@ This project's techniques are directly applicable to production graphics engines
 
 This project demonstrates that professional-quality real-time graphics are achievable through systematic application of GPU architecture principles, mathematical techniques, and software engineering practices. The intersection of these disciplines—knowing when to compute on GPU vs. CPU, when algorithms conflict with performance, how to architect for scale—separates competent graphics programmers from exceptional ones.
 
-The journey from concept (render terrain with instanced vegetation) to execution (70 FPS with 15,000 trees, 400,000 grass blades, complete weather systems, and dynamic lighting) requires iterative refinement, performance analysis, and architectural clarity. Each system detailed in this document represents hours of implementation, debugging, optimization, and documentation.
+The journey from concept (render terrain with instanced vegetation) to execution (real-time performance with 15,000 trees, 5,000,000+ grass blades, complete weather systems, and dynamic lighting) requires iterative refinement, performance analysis, and architectural clarity. Each system detailed in this document represents hours of implementation, debugging, optimization, and documentation.
 
 Most importantly: this work is not the endpoint, but a foundation. The architecture cleanly enables future enhancements—add NPC systems, enable streaming, implement global illumination—without fundamental rewrites. This extensibility represents the true value of careful initial architecture.
 
@@ -291,12 +291,15 @@ make
 ## Appendix B: Keyboard Controls
 
 ```
-W/A/S/D    - Move forward/left/back/right
-Space/Ctrl - Move up/down
-Mouse      - Look around
-R          - Toggle rain
-1-4        - Quality presets
-ESC        - Exit
+W/A/S/D         - Move forward/left/back/right
+Q/E             - Move up/down
+Mouse/Trackpad  - Look around
+Arrow Keys      - Keyboard look fallback (yaw/pitch)
+C               - Toggle cinematic mode
+SPACE           - Pause/resume cinematic
+BACKSPACE       - Reset cinematic timeline
+R               - Toggle rain
+ESC             - Exit
 ```
 
 ## Appendix C: Resource References

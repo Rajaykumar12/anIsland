@@ -73,7 +73,7 @@ Mobile (iPad Pro)   1536×2048     Mobile        32     Functional
   - Realistic wind animation creating life
 
 ✓ **Grass blade rendering**
-  - 400,000+ individual grass blades
+  - 5,000,000+ individual grass blades
   - Terrain-aligned orientation (no clipping)
   - Wind animation synchronized with trees
   - Smooth fade at distance (no sharp transitions)
@@ -188,7 +188,7 @@ The project successfully demonstrates production-quality real-time graphics impl
 
 **Key Achievements:**
 - ✓ 70 FPS performance on GTX 1660 (60 FPS+ achieved)
-- ✓ 15,000 trees + 400,000 grass blades rendered efficiently
+- ✓ 15,000 trees + 5,000,000+ grass blades rendered efficiently
 - ✓ Natural island terrain with biome variation
 - ✓ Realistic water, weather, and lighting systems
 - ✓ Professional-quality shadow mapping

@@ -218,7 +218,7 @@ warmth(timeOfDay):
 |--------|---|---|---|
 | Depth pass (shadow map) | 2-4 ms | Geometry (all triangles rendered) | O(triangle count) |
 | Terrain rendering | 8-12 ms | Fragment shader (PCF + fog) | O(screen pixels) |
-| Grass rendering | 4-6 ms | Vertex shader (400k instances) | O(blade count) |
+| Grass rendering | instance-count dependent | Vertex shader (multi-million instances) | O(blade count) |
 | Water rendering | 2-3 ms | Vertex shader (250k waves) | O(wave samples) |
 | Particles (fireflies + rain) | 1-2 ms | GPU memory bandwidth | O(particle count) |
 | Skybox rendering | 0.5-1 ms | Fragment shader | Fixed O(1) |

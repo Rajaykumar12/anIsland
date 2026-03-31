@@ -6,7 +6,7 @@ Real-time rendering of large-scale, visually complex environments remains one of
 
 This project addresses this challenge through a systematic investigation of GPU-driven rendering techniques, specifically focusing on:
 
-1. **Scalability Problem:** How can we render hundreds of thousands of individual objects while maintaining 60 FPS?
+1. **Scalability Problem:** How can we render millions of individual objects while maintaining 60 FPS?
 2. **Natural Environment Generation:** How can we procedurally generate realistic terrain and place objects according to environmental constraints?
 3. **Dynamic Lighting:** How can we efficiently compute shadows for a dynamic light source orbiting the scene?
 4. **Environmental Effects:** How can we simulate complex environmental phenomena like wind-driven vegetation, ocean waves, and rain particles?

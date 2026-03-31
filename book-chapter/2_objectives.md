@@ -14,11 +14,11 @@ Implement a procedurally generated 800×800 vertex terrain with natural appearan
 - Terrain renders at consistent 60+ FPS
 
 ### Objective 2: Deploy Massive Instanced Object Counts
-Render 15,000+ procedurally-placed trees across the terrain with wind animation, and 407,000+ grass blades with terrain-aware orientation and per-blade physics. Both systems must maintain real-time performance through GPU instancing rather than individual draw calls.
+Render 15,000+ procedurally-placed trees across the terrain with wind animation, and 5,000,000+ fine grass blades with terrain-aware orientation and per-blade wind physics. Both systems must maintain real-time performance through GPU instancing rather than individual draw calls.
 
 **Success Criteria:**
 - 15,000 trees rendered in < 2ms per frame
-- 407,000 grass blades rendered in < 1.5ms per frame
+- 5,000,000+ grass blades rendered in real time with a bounded frame budget
 - Placement respects terrain topology (no floating objects)
 - Wind animation is convincing and physically-grounded
 
@@ -58,7 +58,7 @@ The following performance targets guide implementation decisions:
 | Terrain Generation | < 100ms total, one-time | Heightmap: 512×512 |
 | Terrain Rendering | < 3ms per frame | VAO-based, single draw call |
 | Tree Instancing | < 2ms per frame | 15,000 instances across 4 types |
-| Grass Instancing | < 1.5ms per frame | 407,000+ instances, terrain-aligned |
+| Grass Instancing | real-time budget (scene-dependent) | 5,000,000+ instances, terrain-aligned |
 | Water Rendering | < 1ms per frame | Procedural waves, 500×500 grid |
 | Firefly Particles | < 0.5ms per frame | 500 particles with height constraints |
 | Rain System | < 1ms per frame | 5,000 camera-centered particles |
@@ -77,7 +77,7 @@ The design prioritizes scalability in multiple dimensions:
 ### Vertical Scalability (Visual Quality)
 - **Shadow quality:** Increasing depth map resolution from 2048 to 4096 improves shadow detail at 2-4× computation cost.
 - **Particle count:** Firefly and rain systems scale efficiently; 5,000 particles can increase to 50,000 with minimal performance impact.
-- **Grass density:** Spacing parameter controls blade count; denser grass beyond 1.0-unit spacing remains viable.
+- **Grass density:** Spacing and clump-size parameters jointly control blade count; dense setups at 0.68 spacing with 6-8 blade clumps remain viable.
 
 ### Hardware Scalability
 - **Target hardware:** Designed for NVIDIA GTX 1660 and AMD RX 5700 XT equivalents

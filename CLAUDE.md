@@ -21,12 +21,13 @@ make
 - `LightingSystem` - Day/night cycle (63s orbit), sun color/intensity, fog parameters, shadow FBO
 - `Terrain` - 800×800 vertex grid with Perlin noise heightmap, height-based color bands
 - `TreeSystem` - 15,000 instanced trees placed by terrain height/slope
-- `GrassSystem` - Dense instanced grass with terrain-normal alignment, wind animation, slope filtering
+- `GrassSystem` - Ultra-dense fine instanced grass with terrain-normal alignment, clumped placement, wind animation, slope filtering
 - `BuildingSystem` - 4×4 town grid at center (100-150, 150-200 world coords)
 - `ParticleSystem` - 500 fireflies terrain-sampled, constrained to forest elevation bands (8-85 world units)
 - `WaterSystem` - 500×500 wave mesh at Y ≈ -1.5 with procedural sine displacement
 - `RainSystem` - Toggleable (R key) rain particles, camera-centered
 - `SplashSystem` - Rain impact splashes terrain-aware, rendered at surface level during rain
+- `CinematicCamera` - Terrain-following camera with scripted 14-shot, 8:45 "Island at Dawn" sequence
 
 **Disabled Systems** (present but not instantiated in main_new.cpp):
 - `NPCSystem`, `ColonySystem`
@@ -51,7 +52,7 @@ make
 - **Shadow map**: 2048×2048, orthographic projection -150 to +150 units
 - **Fog formula**: `exp(-(distance * density)^2)` - exponential squared
 - **Fireflies**: Terrain-sampled height, constrained to forest band (8-85 world units), GL_POINTS with additive blending, spawn/update relocates out-of-band particles
-- **Grass**: Terrain world space [0..800], blade orientation via terrain normals (tangent/bitangent basis), wind animation with quadratic sway falloff, clamped for stability, filtered at slope > 55°
+- **Grass**: Terrain world space [0..800], blade orientation via terrain normals (tangent/bitangent basis), tapered short blade profile (0.62 height), dense 0.68 spacing with 6-8 blade clumps, wind animation with quadratic sway falloff, clamped for stability, filtered at slope > 55°
 - **Splashes**: Terrain height-aware spawning, positioned relative to rain camera, GL_POINTS with lifetime-scaled size, disabled depth write
 
 ## Adding a New System
@@ -60,6 +61,39 @@ make
 2. Add `src/YourSystem.cpp` to `SOURCES` in CMakeLists.txt
 3. Include header in `main_new.cpp`, instantiate, call render() in main loop
 4. For shadow casting: render in depth pass before shadow FBO unbind
+
+## Cinematic Camera System
+
+**New System: CinematicCamera** - Extends Camera with terrain-following and scripted shots.
+
+**Controls:**
+- `C` - Toggle cinematic mode on/off
+- `SPACE` - Pause/resume cinematic
+- `BACKSPACE` - Reset cinematic to beginning
+- `WASD/QE` - Free camera movement (when not in cinematic mode)
+
+**Scene: "The Island - A Day's Journey"** - 8:45 unbroken cinematic sequence (525s):
+
+| Shot | Duration | Description | Time of Day |
+|------|----------|-------------|-------------|
+| The Sleeping Island | 0:00-0:30 | Wide aerial night view showing full island | Night |
+| Approaching the Summit | 0:30-1:00 | Descend toward mountain peak | Night |
+| The First Light | 1:00-1:45 | Watch sunrise from eastern slopes | Dawn |
+| Orbital Awakening | 1:45-2:45 | Wide 270° orbit showing geography | Morning |
+| Ridge to Valley Glide | 2:45-3:30 | Wide descent away from summit toward valley | Day |
+| Valley Panorama | 3:30-4:15 | Broad lateral pass with mountain context | Day |
+| Sunline Interlude | 4:15-4:45 | Mid-sequence direct sunrise callback, easing into grasslands | Day |
+| Ocean of Grass | 4:45-5:15 | Low over grasslands | Day |
+| The Shoreline | 5:15-5:45 | Water's edge | Day |
+| Dusk Arrives | 5:45-6:30 | Sunset on western horizon | Dusk |
+| The Moon Rises | 6:30-7:15 | Night sky with moon | Night |
+| Firefly Dance | 7:15-7:45 | Move through forest edge fireflies | Night |
+| The Island at Night | 7:45-8:30 | Rise to altitude, wide night view | Night |
+| Fade to Stars | 8:30-8:45 | Final rotation | Night |
+
+**Day/Night Cycle:** Complete progression: Night → Dawn → Day → Dusk → Night (moon + fireflies)
+
+**Terrain Collision:** Camera automatically adjusts Y to stay 3+ units above terrain using bilinear heightmap sampling with forward collision detection.
 
 ## Recent Improvements (Latest Session)
 
@@ -71,6 +105,10 @@ make
 - Constrained fireflies to forest elevation band (8-85 world units) with retry spawning
 - Completed SplashSystem: terrain-aware spawn positions, integrated rendering in main loop
 - Disabled NPC/Colony systems (still compiled but not instantiated in main_new.cpp)
+- Rebalanced cinematic middle/later sequence to reduce mountaintop lock-in with wider coverage shots
+- Added midpoint direct sunrise callback shot while preserving total runtime and transition continuity
+- Increased grass field volume to roughly 10x via tighter spacing and clumped instancing
+- Refined grass silhouette with slightly shorter, finer tapered blades
 
 ## Troubleshooting
 
