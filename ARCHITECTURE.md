@@ -1,265 +1,136 @@
-# Terrain Visualization - Modular Architecture
+# Terrain Visualization Architecture
 
-## Project Structure
+## Overview
 
-This project has been refactored from a monolithic `main.cpp` into a modular system architecture for better organization and maintainability.
+The project uses a modular C++ architecture with dedicated systems for terrain, vegetation, water, particles, weather, lighting, and a timeline-based cinematic controller.
 
-### Core Systems
+Entry point: `main_new.cpp`
 
-#### 1. **TreeSystem** (`include/TreeSystem.h`, `src/TreeSystem.cpp`)
-- Manages 15,000 instanced trees
-- Filters tree placement based on terrain height and slope
-- Handles tree geometry (trunk + multi-level canopy)
-- Renders with Phong lighting and dynamic sky color
+## Active Runtime Systems
 
-#### 2. **GrassSystem** (`include/GrassSystem.h`, `src/GrassSystem.cpp`)
-- Generates dense grass blade instances across mountain terrain
-- Places grass at world coordinates [0..800] × [0..800], precisely aligned to terrain space
-- Aligns each blade to local terrain normal via computed tangent/bitangent basis for slope-following orientation
-- Wind animation: sinusoidal sway with quadratic falloff from blade base, clamped height factor [0,1] for stability
-- Filters: excludes underwater (Y < 2.0), extreme slopes (> 55°), and terrain shadow regions
-- Each blade is a simple quad (2 triangles); 1.4 unit spacing creates natural density
-- Uses efficient instanced rendering (single draw call)
-- Dependencies: heightmap (512×512), terrain size (800×800)
+- `Terrain`
+  - Generates and draws the 800x800 terrain mesh.
+  - Uses a 512x512 procedural noise heightmap.
 
-#### 3. **BuildingSystem** (`include/BuildingSystem.h`, `src/BuildingSystem.cpp`)
-- Creates a 4x4 grid of houses in the town center (100-150, 150-200)
-- Each building has walls, roof (pyramid), and windows
-- All geometry stored as triangles for GL_TRIANGLES rendering
-- Instanced rendering for efficient batch processing
+- `TreeSystem`
+  - Renders 15,000 instanced trees.
+  - Placement filtered by terrain shape.
 
-#### 4. **RainSystem** (`include/RainSystem.h`, `src/RainSystem.cpp`)
-- Simulates large rain particle fields over the terrain
-- Toggleable in runtime (R key)
-- Integrates with camera-centered updates for coverage
+- `GrassSystem`
+  - Dense instanced grass aligned to terrain normals.
+  - Wind sway uses time + strength envelope.
 
-#### 5. **ParticleSystem** (`include/ParticleSystem.h`, `src/ParticleSystem.cpp`)
-- Manages 500 firefly particles with physics simulation
-- **Terrain Sampling**: Bilinear heightmap lookup for precise above-ground placement; samples at normalized world coordinates [0..800]
-- **Forest Confinement**: Constrains spawn and relocation to elevation band [8..85] world units (tree habitat range); up to 32 retry attempts on out-of-bounds spawn
-- **Height Offset**: Hovers 5–10 units above local terrain via `y = terrainHeight + BASE_HOVER`; update relocates out-of-band particles
-- **Fluttering**: Adds sinusoidal flutter with random phase and frequency while preserving elevation constraints
-- Wraps particles within terrain bounds on X/Z drift
-- Renders as GL_POINTS with additive blending; intensity fades with day/night lighting
-- Dependencies: heightmap (512×512), terrain size (800×800)
+- `WaterSystem`
+  - Procedural wave displacement and color depth response.
 
-#### 6. **WaterSystem** (`include/WaterSystem.h`, `src/WaterSystem.cpp`)
-- Generates 500x500 grid water mesh
-- Covers ±500 units around terrain center
-- Water tuned near shoreline level for beach contact (current level near Y = -1.5)
-- Uses procedural sine wave displacement for wave simulation
-- Implements height-based color blending (deep blue to shallow cyan)
+- `ParticleSystem`
+  - 500 fireflies with terrain-aware placement.
+  - Constrained to forest elevation range.
 
-#### 9. **Legacy Systems (Disabled in active main loop)**
-- **NPCSystem** (`include/NPCSystem.h`, `src/NPCSystem.cpp`) is present in the codebase but not instantiated/rendered in `main_new.cpp`
-- **ColonySystem** (`include/ColonySystem.h`, `src/ColonySystem.cpp`) is present in the codebase but not instantiated/rendered in `main_new.cpp`
+- `RainSystem`
+  - Toggleable rain particle field.
 
-#### 7. **SplashSystem** (`include/SplashSystem.h`, `src/SplashSystem.cpp`)
-- Renders rain impact splashes on terrain surface during active rain
-- **Terrain Sampling**: Normalizes camera-relative spawn offset to heightmap indices; applies 150.0f height scale
-- **Spawn Rate**: 3–7 splashes per frame when raining; randomized lifetime [0.2..0.4] seconds
-- **Visual**: GL_POINTS with triangle-wave size scaling, GL_SRC_ALPHA blending, disabled depth write for layering
-- **Position Offset**: +0.08 world units above sampled terrain height for visual clarity
-- Constructor signature: `SplashSystem(int maxSplashes, const std::vector<float>& heightmap, int hmWidth, int hmHeight, float terrainWidth, float terrainDepth)`
-- Dependencies: heightmap (512×512), terrain size (800×800), camera position
+- `SplashSystem`
+  - Terrain-aware splash particles during rain.
 
-#### 8. **LightingSystem** (`include/LightingSystem.h`, `src/LightingSystem.cpp`)
-- Implements day/night cycle with sun orbit
-- Calculates dynamic light color based on time of day
-- Interpolates sky color from night (dark) to day (bright)
-- Provides sun intensity (0.2 at night, 1.0 at day)
-- **Day Speed**: 0.1f (one full day = ~63 seconds)
-- **Shadow Mapping**: Manages depth FBO (2048×2048), depth texture, light matrices
-- **Fog Integration**: Provides dynamic fog color tied to day/night cycle
+- `LightingSystem`
+  - Sun orbit, sky color, fog color, sun intensity.
+  - Shadow framebuffer + light-space matrices.
+  - Supports manual sun override for cinematic mode.
 
-### Supporting Systems (Existing)
+- `CinematicController`
+  - 300-second timeline for "The Island at Dawn".
+  - Produces per-frame cinematic state:
+    - camera position/target/zoom
+    - sun position
+    - wind strength
+    - fade color/alpha
+    - firefly visibility boost
 
-- **Camera** (`include/Camera.h`, `src/Camera.cpp`)
-  - FPS camera with mouse look and WASD movement
-  - Default position: (125, 200, 175) above town center
+## Render Flow (Per Frame)
 
-- **Terrain** (`include/Terrain.h`, `src/Terrain.cpp`)
-  - 800x800 vertex grid with procedural Perlin noise heightmap
-  - Height range: 0-150 units
-  - Includes normal mapping from heightmap slopes
-  - Dynamic coloring based on height bands (grass → dirt → rock → snow)
+1. Input + timing
+   - Handle keys (`C`, `R`, `F`, movement)
+   - Update cinematic timeline if active
 
-- **NoiseMap** (`include/NoiseMap.h`, `src/NoiseMap.cpp`)
-  - Perlin noise generation (512x512 heightmap)
-  - Octave-based fractal brownian motion
-  - Configurable scale and amplitude
+2. Camera and sun application
+   - If cinematic active:
+     - Apply timeline camera pose
+     - Apply terrain safety clamp to camera and target heights
+     - Apply manual sun position override
+   - Else:
+     - Use free camera controls
+     - Use automatic day/night sun update
 
-- **Shader** (`include/Shader.h`, `src/Shader.cpp`)
-  - Shader compilation and linking utility
-  - Uniform setters for matrices, vectors, floats
+3. Shadow depth pass
+   - Render depth from light POV to 2048x2048 depth texture
 
-### Shader Assets
+4. Main color pass
+   - Render terrain
+   - Render grass, trees, water
+   - Render fireflies, rain, and splashes
 
-```
-assets/shaders/
-├── terrain.vert/frag    - Heightmap-based terrain with Phong lighting, shadow mapping, fog
-├── grass.vert/frag      - Terrain-normal-aligned grass with wind sway (quadratic falloff, clamped)
-├── tree.vert/frag       - Instanced tree rendering with fog and wind
-├── building.vert/frag   - Instanced building rendering with fog
-├── person.vert/frag     - Legacy NPC shader (system currently disabled in main_new.cpp)
-├── particle.vert/frag   - GL_POINTS firefly rendering with additive glow
-├── water.vert/frag      - Procedural sine wave water with light response, fog
-├── rain.vert/frag       - Rain particle rendering, camera-centered
-├── splash.vert/frag     - Terrain-aware rain splash particles with lifetime scaling
-├── depth.vert/frag      - Shadow mapping depth pass (light space rendering)
-└── skybox.vert/frag     - Dynamic procedural skybox with stars, sunset glow
-```
+5. Skybox pass
+   - Procedural sky and stars
 
-### Build System
+6. Fade overlay pass (cinematic only)
+   - Fullscreen color+alpha fade for ending shot
 
-- **Build Directory**: `build/`
-- **CMakeLists.txt**: Updated to compile all modular sources
-- **Dependencies**: OpenGL 3.3 Core, GLFW3, GLM, GLAD
+## Two-Pass Lighting Pipeline
 
-### File Organization
+- Depth pass shader: `assets/shaders/depth.vert`, `assets/shaders/depth.frag`
+- Color pass sampling:
+  - Shadow map bound to texture unit 1
+  - Terrain and scene shaders use light direction/color from `LightingSystem`
 
-```
-CGAssignment/
-├── main_new.cpp          # Clean refactored main (uses systems)
-├── main.cpp              # Original monolithic version (deprecated)
-├── CMakeLists.txt        # Updated build system
-├── include/
-│   ├── Camera.h
-│   ├── Terrain.h
-│   ├── Shader.h
-│   ├── NoiseMap.h
-│   ├── TreeSystem.h      # NEW
-│   ├── GrassSystem.h     # NEW
-│   ├── BuildingSystem.h  # NEW
-│   ├── NPCSystem.h       # NEW
-│   ├── ParticleSystem.h  # NEW
-│   ├── WaterSystem.h     # NEW
-│   └── LightingSystem.h  # NEW
-├── src/
-│   ├── Camera.cpp
-│   ├── Terrain.cpp
-│   ├── Shader.cpp
-│   ├── NoiseMap.cpp
-│   ├── TreeSystem.cpp    # NEW
-│   ├── GrassSystem.cpp   # NEW
-│   ├── BuildingSystem.cpp # NEW
-│   ├── NPCSystem.cpp     # NEW
-│   ├── ParticleSystem.cpp # NEW
-│   ├── WaterSystem.cpp   # NEW
-│   └── LightingSystem.cpp # NEW
-├── assets/shaders/       # Shader files
-├── build/                # CMake build directory
-└── glad.c                # OpenGL loader
-```
+## Cinematic Design Notes
 
-### Compilation
+The cinematic follows a single-shot arc across seven acts:
 
-```bash
-cd build
-cmake ..
-make
-./OpenGLTerrainInstancing
-```
+1. Summit pre-dawn hold/pan
+2. Summit orbit into sunrise
+3. Descent along mountain shoulder
+4. Forest traversal and canopy rise
+5. Grassland + shoreline pass
+6. Dusk transition with fireflies
+7. Final night wide rise and fade
 
-### Controls
+Implementation details:
+- Duration: `300s`
+- Camera remains terrain-safe with per-frame clearance clamp
+- Final act includes boosted firefly readability for wide night composition
 
-- **W/A/S/D** - Move forward/left/backward/right
-- **Q/E** - Move up/down
-- **Mouse** - Look around (captured)
-- **ESC** - Exit
-- **F** - Toggle wireframe mode
-- **R** - Toggle rain
+## Shader Responsibilities
 
-### Key Features
+- `terrain.*`: terrain shading + shadows + fog
+- `tree.*`: instanced tree shading + wind
+- `grass.*`: grass sway + lighting
+- `water.*`: wave displacement + light response
+- `particle.*`: firefly point rendering, day/night gating, cinematic boost
+- `rain.*`: rain particle rendering
+- `splash.*`: splash points at sampled terrain heights
+- `skybox.*`: procedural sky/stars with time-driven behavior
+- `fade.*`: fullscreen cinematic fade
 
-✅ **Shadow Mapping** - Real-time directional shadows with PCF filtering (2048×2048 depth map)
-✅ **Volumetric Fog** - Exponential squared fog formula, dynamically tied to day/night cycle
-✅ **Dynamic Procedural Skybox** - Multi-octave stars with colors, soft halos, twinkling
-✅ **Sunset Glow** - Orange/red atmospheric glow when sun is near horizon
-✅ **Day/Night Cycle** - Sun orbits every ~63 seconds, all lighting changes dynamically
-✅ **Firefly Particles** - 500 glowing particles with physics-based movement
-✅ **Dynamic Water + Shoreline** - Procedural waves with irregular coast and beach transition
-✅ **Terrain Instancing** - 15,000 trees, 16 buildings, and dense mountain grass rendered efficiently
-✅ **Two-Pass Rendering** - Depth pass (light space) + Color pass (camera space with shadows)
+## Data Dependencies
 
-### Rendering Pipeline
+- Heightmap noise drives:
+  - terrain geometry
+  - firefly spawn heights
+  - camera terrain clearance checks
+  - splash surface placement
 
-The modern rendering pipeline uses a **two-pass approach**:
+- Lighting outputs drive:
+  - scene light direction and color
+  - fog tint/intensity behavior
+  - firefly day/night visibility
 
-**Pass 1: Depth Rendering (Shadow Map)**
-- Viewport: 2048×2048 (shadow resolution)
-- Framebuffer: Depth FBO (writes to depth texture)
-- Shader: depth.vert/frag (minimal, light space transformation)
-- Renders: Terrain geometry from light's perspective
+## Build Wiring
 
-**Pass 2: Color Rendering (Scene)**
-- Viewport: Restored to window size (1280×720 default)
-- Framebuffer: Screen framebuffer
-- Shaders: All standard shaders (terrain, tree, building, water, etc.)
-- Shadow Map: Bound as GL_TEXTURE1, sampled in fragment shaders
-- Fog: Applied using camera distance, color varies with day/night cycle
+`CMakeLists.txt` compiles these modules:
+- `main_new.cpp`
+- all system `.cpp` files in `src/`
+- `src/CinematicController.cpp`
+- `glad.c`
 
-**Skybox (Final)**
-- Rendered last after all scene geometry
-- Depth function: GL_LEQUAL (always behind scene)
-- Procedural shader calculates sky color, sunset, stars based on sun position
-- View matrix: Modified to remove translation (follows camera perspective)
-
-### Advanced Features
-
-#### Shadow Mapping with PCF Filtering
-- **Depth Map**: 2048×2048 floating-point depth texture
-- **Light Projection**: Orthographic (-150, 150) units with 1-300 plane distances
-- **PCF Kernel**: 3×3 filter for soft shadow edges
-- **Bias System**: Dynamic bias (0.005-0.05) prevents shadow acne
-- **Performance**: Single depth pass + shadow sampling in color pass
-
-#### Volumetric Exponential Fog
-- **Formula**: $fog\_factor = e^{-(distance \cdot density)^2}$
-- **Dynamic Color**: Fog color changes with day/night cycle (light blue day → dark blue night)
-- **Shader Integration**: Applied in terrain, tree, grass, water, building, person shaders
-- **Distance Calculation**: Computed in vertex shader for per-pixel accuracy
-
-#### Procedural Skybox System
-- **Technology**: Pure GLSL procedural generation (no texture files)
-- **Sky Gradient**: Smooth interpolation from deep black (night) to bright blue (day)
-- **Sunset Effect**: Orange/red glow when sun is near horizon, fades with distance from sun
-- **Star Field**: Three-layer system with 1000+ stars visible
-  - Layer 1 (6%): Primary bright stars with color variation (yellow, white, blue)
-  - Layer 2 (3%): Secondary stars with medium brightness
-  - Layer 3 (1.5%): Tertiary faint stars for depth
-- **Star Features**: Gaussian glow halos, color variation, subtle twinkling, smooth fade-in/out
-- **No Loading**: Entire skybox computed in real-time fragment shader
-
-### Performance Notes
-
-- **Tree Count**: 15,000 (instanced, 1 draw call)
-- **Building Count**: 16 (instanced, 1 draw call)
-- **NPC Count**: Disabled in active `main_new.cpp` pipeline
-- **Terrain Resolution**: 800x800 vertices
-- **Particle Count**: 500 (updated each frame)
-- **Water Grid**: 500x500 triangles (100k + polygons)
-- **Heightmap**: 512x512 (procedural, no file I/O)
-
-### Extension Points
-
-To add new systems:
-
-1. Create `include/YourSystem.h` with class definition
-2. Create `src/YourSystem.cpp` with implementation
-3. Add `src/YourSystem.cpp` to CMakeLists.txt SOURCES
-4. Include header in `main_new.cpp`
-5. Instantiate and call render methods in main loop
-
-### Visual Settings (Adjustable in Code)
-
-- **Fog Density**: 0.0002-0.0005 (varies by shader - terrain/grass/water/etc.)
-- **Fog Formula**: Exponential squared ($visibility = e^{-(distance \cdot density)^2}$)
-- **Day Speed**: 0.1f (LightingSystem.cpp) - lower = longer days
-- **Water Level**: ~-1.5f (WaterSystem)
-- **Particle Count**: 500 (main_new.cpp, ParticleSystem)
-- **Sun Radius**: 100.0f (LightingSystem.cpp)
-- **Shadow Map Resolution**: 2048×2048 (LightingSystem.cpp)
-- **Shadow Projection**: Orthographic -150 to +150 units (LightingSystem.cpp)
-- **Star Density**: Three layers (primary 6%, secondary 3%, tertiary 1.5% occurrence)
-
+Assets are copied to build output via CMake post-build step.

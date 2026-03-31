@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance when working on this repository.
 
 ## Build Commands
 
@@ -11,71 +11,103 @@ make
 ./OpenGLTerrainInstancing
 ```
 
-## Architecture
+## Runtime Controls
 
-**Two-Pass Rendering Pipeline:**
-1. **Depth Pass** - Renders scene from light's perspective to 2048×2048 depth texture (shadow map)
-2. **Color Pass** - Renders scene from camera, samples shadow map for PCF-filtered directional shadows
+- `W/A/S/D`, `Q/E`, mouse: free camera movement
+- `C`: toggle cinematic mode (start/stop/reset)
+- `R`: toggle rain
+- `F`: toggle wireframe
+- `ESC`: exit
 
-**Core Systems** (all in `src/` with headers in `include/`):
-- `LightingSystem` - Day/night cycle (63s orbit), sun color/intensity, fog parameters, shadow FBO
-- `Terrain` - 800×800 vertex grid with Perlin noise heightmap, height-based color bands
-- `TreeSystem` - 15,000 instanced trees placed by terrain height/slope
-- `GrassSystem` - Dense instanced grass with terrain-normal alignment, wind animation, slope filtering
-- `BuildingSystem` - 4×4 town grid at center (100-150, 150-200 world coords)
-- `ParticleSystem` - 500 fireflies terrain-sampled, constrained to forest elevation bands (8-85 world units)
-- `WaterSystem` - 500×500 wave mesh at Y ≈ -1.5 with procedural sine displacement
-- `RainSystem` - Toggleable (R key) rain particles, camera-centered
-- `SplashSystem` - Rain impact splashes terrain-aware, rendered at surface level during rain
+When cinematic mode is active (or finished), manual camera input is locked.
 
-**Disabled Systems** (present but not instantiated in main_new.cpp):
-- `NPCSystem`, `ColonySystem`
+## Architecture Summary
 
-**Key Shader Files** (`assets/shaders/`):
-- `depth.vert/frag` - Shadow map generation (light space transform)
-- `terrain.vert/frag` - Terrain with shadow sampling, fog, Phong lighting
-- `grass.vert/frag` - Terrain-normal-aligned grass with wind sway animation
-- `tree.vert/frag` - Instanced trees with wind effect
-- `building.vert/frag` - Instanced buildings
-- `particle.vert/frag` - Firefly rendering with glow
-- `water.vert/frag` - Procedural wave displacement
-- `rain.vert/frag` - Rain particle rendering
-- `splash.vert/frag` - Terrain-aware splash particles
-- `skybox.vert/frag` - Procedural sky with stars, sunset glow, day/night color
+### Core Render Pipeline
 
-## Key Implementation Details
+1. **Depth Pass**
+   - Render from light perspective into 2048x2048 depth texture.
+2. **Color Pass**
+   - Render scene from camera and sample shadow map.
+3. **Skybox Pass**
+   - Procedural sky and stars.
+4. **Fade Pass**
+   - Fullscreen cinematic fade in final shot.
 
-- **Camera spawn**: (125, 200, 175)
-- **Terrain size**: 800×800 vertices spanning 800×800 world units
-- **Heightmap**: 512×512 Perlin noise with fractal Brownian motion
-- **Shadow map**: 2048×2048, orthographic projection -150 to +150 units
-- **Fog formula**: `exp(-(distance * density)^2)` - exponential squared
-- **Fireflies**: Terrain-sampled height, constrained to forest band (8-85 world units), GL_POINTS with additive blending, spawn/update relocates out-of-band particles
-- **Grass**: Terrain world space [0..800], blade orientation via terrain normals (tangent/bitangent basis), wind animation with quadratic sway falloff, clamped for stability, filtered at slope > 55°
-- **Splashes**: Terrain height-aware spawning, positioned relative to rain camera, GL_POINTS with lifetime-scaled size, disabled depth write
+### Active Systems (in `src/` with headers in `include/`)
 
-## Adding a New System
+- `Terrain`
+- `TreeSystem`
+- `GrassSystem`
+- `WaterSystem`
+- `ParticleSystem` (fireflies)
+- `RainSystem`
+- `SplashSystem`
+- `LightingSystem`
+- `CinematicController`
 
-1. Create `include/YourSystem.h` and `src/YourSystem.cpp`
-2. Add `src/YourSystem.cpp` to `SOURCES` in CMakeLists.txt
-3. Include header in `main_new.cpp`, instantiate, call render() in main loop
-4. For shadow casting: render in depth pass before shadow FBO unbind
+### Cinematic System
 
-## Recent Improvements (Latest Session)
+`CinematicController` drives a 300-second sequence and outputs:
+- camera position/target
+- camera zoom
+- sun position override
+- wind strength
+- fade color/alpha
+- firefly boost for late-night wide shot visibility
 
-**Completed Features:**
-- Fixed grass coordinate frame alignment to world space [0..800] × [0..800]
-- Implemented terrain-normal-aligned grass blade orientation (tangent/bitangent basis)
-- Added wind animation with quadratic falloff and clamped height factor for stability
-- Implemented terrain height sampling in ParticleSystem for firefly placement
-- Constrained fireflies to forest elevation band (8-85 world units) with retry spawning
-- Completed SplashSystem: terrain-aware spawn positions, integrated rendering in main loop
-- Disabled NPC/Colony systems (still compiled but not instantiated in main_new.cpp)
+Main integration points:
+- `main_new.cpp` applies cinematic frame values every update when active.
+- Terrain safety clamping prevents camera/target from dropping below terrain.
+- `LightingSystem` supports manual sun override for cinematic beats.
+
+## Key Technical Facts
+
+- Terrain mesh: `800x800`
+- Heightmap: `512x512` procedural noise
+- Camera spawn: `(125, 200, 175)`
+- Shadow map: `2048x2048`
+- Day cycle speed (free-run): ~63s per cycle
+- Fireflies: 500 particles in forest elevation band `8..85`
+- Fog model: `exp(-(distance * density)^2)`
+
+## Shader Map (`assets/shaders/`)
+
+- `depth.vert/.frag`: shadow map generation
+- `terrain.vert/.frag`: terrain lighting, fog, shadows
+- `tree.vert/.frag`: tree instancing + wind
+- `grass.vert/.frag`: grass instancing + wind
+- `water.vert/.frag`: wave shading
+- `particle.vert/.frag`: fireflies (day/night + cinematic boost)
+- `rain.vert/.frag`: rain particles
+- `splash.vert/.frag`: splash particles
+- `skybox.vert/.frag`: procedural sky and stars
+- `fade.vert/.frag`: cinematic fullscreen fade
+
+## Extension Workflow
+
+To add a new system:
+1. Add `include/YourSystem.h` and `src/YourSystem.cpp`.
+2. Register `src/YourSystem.cpp` in `CMakeLists.txt` sources.
+3. Instantiate and update/render from `main_new.cpp`.
+4. If it casts shadows, include it in depth pass before unbinding the shadow FBO.
+
+## Recent Session Changes
+
+- Added `CinematicController` and integrated 5-minute timeline sequence.
+- Added cinematic camera locking and `C` key toggle flow.
+- Added terrain-aware camera/target safety clamp for cinematic shots.
+- Added manual sun override hooks in `LightingSystem` for timeline lighting.
+- Added final fullscreen fade pass (`fade.vert/.frag`).
+- Added firefly visibility boosting in late cinematic night shot.
 
 ## Troubleshooting
 
-- **Black screen**: Check `assets/shaders/` exists in build output (auto-copied by CMake)
-- **No shadows**: Verify depth pass renders before color pass; shadow texture bound to GL_TEXTURE1
-- **Fireflies underground**: Ensure `ParticleSystem::init()` samples terrain heightmap correctly
-- **Grass not visible**: Verify grass coordinate frame [0..800]; check heightmap is loaded in GrassSystem
-- **Splashes in air**: Ensure SplashSystem constructor receives correct heightmap and terrain dimensions
+- **Black screen**
+  - Verify shader assets are copied into `build/assets/shaders`.
+- **No shadows**
+  - Confirm depth pass executes before color pass.
+- **Fireflies not visible at night**
+  - Check `dayIntensity` progression and particle `fireflyBoost` uniforms.
+- **Cinematic camera clipping terrain**
+  - Verify terrain height sampling and clearance clamp path in `main_new.cpp`.

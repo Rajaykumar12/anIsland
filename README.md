@@ -1,87 +1,23 @@
 # OpenGL Terrain Visualization
 
-A modern C++ OpenGL application featuring a procedurally generated terrain with dynamic lighting, advanced visual effects, and a modular system architecture. Includes day/night cycles, shadow mapping, volumetric fog, forest-confined firefly particles, and interactive environmental elements.
+A modern C++/OpenGL terrain project with procedural generation, dynamic lighting, shadow mapping, weather effects, and a fully scripted 5-minute cinematic sequence.
 
-## Features
+## Highlights
 
-### Rendering & Graphics
-- **Procedural Terrain** - 800×800 vertex grid with fractal Brownian motion (Perlin noise)
-- **Shadow Mapping** - Real-time directional shadows with PCF filtering (2048×2048 depth map)
-- **Volumetric Fog** - Exponential squared fog dynamically tied to day/night cycle
-- **Dynamic Procedural Skybox** - Multi-octave stars with twinkling, sunset glow, and atmospheric effects
-- **Height-based Terrain Coloring** - Dynamic color bands (grass → dirt → rock → snow)
+- Procedural terrain (800x800 grid) from Perlin/fBm noise (512x512 heightmap)
+- Two-pass shadow mapping (2048x2048 depth map + PCF sampling)
+- Dynamic day/night lighting with sky, fog, and sun color transitions
+- Instanced environment rendering:
+  - 15,000 trees
+  - Dense terrain-aligned grass
+  - 500 fireflies (terrain-sampled, forest-band constrained)
+- Water surface with procedural wave displacement
+- Rain + terrain-aware splashes
+- Scripted cinematic: "The Island at Dawn" (single-shot, 300 seconds)
 
-### Simulation Systems
-- **15,000 Instanced Trees** - Intelligent placement based on terrain height/slope with Phong lighting
-- **Procedural Grass** - Dense grass on mountain slopes with terrain-normal alignment, wind sway animation (quadratic falloff with stability clamping)
-- **Dynamic Water + Coastline** - Procedural wave surface with irregular island shoreline and beach transition
-- **Town Grid** - 4×4 building blocks with illuminated windows in the terrain center
-- **Firefly Particles** - 500 glowing particles with terrain-sampled height, constrained to forest elevation bands (8–85 world units)
-- **Rain Splashes** - Terrain-aware splash particles rendered at surface level during rain events
-
-### Lighting & Atmosphere
-- **Day/Night Cycle** - Sun orbits every ~63 seconds with dynamic color interpolation
-- **Real-time Shadows** - Two-pass rendering pipeline (depth pass + color pass with shadow sampling)
-- **Fog Integration** - Color and intensity change with time of day
-- **Directional Lighting** - With dynamic intensity (0.2 night → 1.0 day)
-
-### Dynamic Features
-- **Interactive FPS Camera** - WASD movement, mouse look, vertical flight
-- **Wireframe Toggle** - Real-time visual debugging
-- **Optimized Rendering** - Instanced rendering for efficient batch processing
-- **Modern OpenGL** - OpenGL 3.3 Core Profile with VAO/VBO/shader architecture
-
-## Requirements
-
-### Build Dependencies
-- **C++17** or later
-- **CMake 3.10+**
-- **OpenGL 3.3+**
-- **GLFW3** - Window and input management
-- **GLM** - Graphics mathematics library
-- **GLAD** - OpenGL function loader
-
-### System Requirements
-- Linux/macOS/Windows with modern GPU supporting OpenGL 3.3+
-- ~100MB disk space for build artifacts
-- Dedicated graphics card recommended for smooth performance
-
-## Building
-
-### Quick Start
+## Build
 
 ```bash
-# Navigate to project directory
-cd CGAssignment
-
-# Create and enter build directory
-mkdir -p build
-cd build
-
-# Configure and build
-cmake ..
-make
-
-# Run the application
-./OpenGLTerrainInstancing
-```
-
-### macOS with Homebrew
-```bash
-# Install dependencies (if not already installed)
-brew install glfw glm
-
-cd build
-cmake ..
-make
-./OpenGLTerrainInstancing
-```
-
-### Ubuntu/Debian
-```bash
-# Install dependencies
-sudo apt-get install libglfw3-dev libglm-dev
-
 cd build
 cmake ..
 make
@@ -92,131 +28,114 @@ make
 
 | Key | Action |
 |-----|--------|
-| **W/A/S/D** | Move forward/left/backward/right |
-| **Q/E** | Move up/down (vertical flight) |
-| **Mouse** | Look around (captured) |
-| **F** | Toggle wireframe mode |
-| **ESC** | Exit application |
+| W / A / S / D | Move camera |
+| Q / E | Move up / down |
+| Mouse | Look around |
+| C | Toggle cinematic mode (start/stop/reset) |
+| R | Toggle rain |
+| F | Toggle wireframe |
+| ESC | Exit |
 
-## Project Structure
+Notes:
+- While cinematic mode is active (or completed), manual camera input is locked.
+- Cinematic camera automatically keeps safe clearance above terrain.
 
-```
+## Cinematic: The Island at Dawn
+
+The runtime includes a timeline-driven cinematic controller (`300s`) that drives:
+- Camera position and target
+- Camera zoom
+- Sun position override (for dawn -> day -> dusk -> night choreography)
+- Wind intensity envelope
+- Firefly visibility boost in late-night wide shot
+- Final deep-blue-to-black fade
+
+Main cinematic phases:
+1. Summit pre-dawn hold and pan
+2. Slow summit orbit through sunrise
+3. Mountain descent (shoulder path, no under-mountain framing)
+4. Forest traversal and canopy rise
+5. Grasslands and shoreline water pass
+6. Dusk transition and firefly reveal
+7. Final wide rise over island and ocean with night fade-out
+
+## Rendering Pipeline
+
+1. Depth pass from light POV into shadow map
+2. Color pass from camera POV with shadow sampling
+3. Skybox pass (procedural sky and stars)
+4. Cinematic fade overlay pass (when active)
+
+## Project Layout
+
+```text
 CGAssignment/
-├── CMakeLists.txt              # Build configuration
-├── ARCHITECTURE.md             # Detailed system documentation
-├── main_new.cpp               # Main application entry point
-├── glad.c                     # OpenGL loader implementation
+├── CMakeLists.txt
+├── main_new.cpp
+├── README.md
+├── ARCHITECTURE.md
+├── CLAUDE.md
 ├── include/
-│   ├── Terrain.h              # Heightmap-based terrain
-│   ├── Camera.h               # FPS camera controller
-│   ├── Shader.h               # OpenGL shader utility
-│   ├── NoiseMap.h             # Perlin noise generation
-│   ├── TreeSystem.h           # 15,000 instanced trees (NEW)
-│   ├── GrassSystem.h          # Static slope-aligned mountain grass (NEW)
-│   ├── BuildingSystem.h       # Town buildings (NEW)
-│   ├── ParticleSystem.h       # Firefly particles (NEW)
-│   ├── WaterSystem.h          # Dynamic water (NEW)
-│   ├── LightingSystem.h       # Day/night cycle & shadows (NEW)
-│   ├── RainSystem.h           # Rain simulation (NEW)
-│   └── glad/glad.h            # OpenGL headers
+│   ├── Camera.h
+│   ├── CinematicController.h
+│   ├── GrassSystem.h
+│   ├── LightingSystem.h
+│   ├── NoiseMap.h
+│   ├── ParticleSystem.h
+│   ├── RainSystem.h
+│   ├── Shader.h
+│   ├── SplashSystem.h
+│   ├── Terrain.h
+│   ├── TreeSystem.h
+│   └── WaterSystem.h
 ├── src/
-│   ├── [Corresponding .cpp implementations]
-├── assets/shaders/
-│   ├── terrain.vert/.frag     # Terrain rendering with shadows
-│   ├── grass.vert/.frag       # Static slope-aligned grass
-│   ├── tree.vert/.frag        # Instanced tree rendering
-│   ├── building.vert/.frag    # Building rendering
-│   ├── particle.vert/.frag    # Firefly rendering
-│   ├── water.vert/.frag       # Procedural water
-│   ├── depth.vert/.frag       # Shadow map generation
-│   ├── rain.vert/.frag        # Rain particles
-│   └── skybox.vert/.frag      # Dynamic sky rendering
-└── build/                      # CMake build directory
+│   ├── Camera.cpp
+│   ├── CinematicController.cpp
+│   ├── GrassSystem.cpp
+│   ├── LightingSystem.cpp
+│   ├── NoiseMap.cpp
+│   ├── ParticleSystem.cpp
+│   ├── RainSystem.cpp
+│   ├── Shader.cpp
+│   ├── SplashSystem.cpp
+│   ├── Terrain.cpp
+│   ├── TreeSystem.cpp
+│   └── WaterSystem.cpp
+└── assets/shaders/
+    ├── depth.vert/.frag
+    ├── fade.vert/.frag
+    ├── grass.vert/.frag
+    ├── particle.vert/.frag
+    ├── rain.vert/.frag
+    ├── skybox.vert/.frag
+    ├── splash.vert/.frag
+    ├── terrain.vert/.frag
+    ├── tree.vert/.frag
+    └── water.vert/.frag
 ```
 
-## Architecture
+## Technical Notes
 
-This project uses a **modular system-based architecture** for maintainability and scalability:
-
-### Core Systems
-
-- **Terrain System** - Procedurally generates heightmap using fractal Brownian motion
-- **Lighting System** - Manages day/night cycle, shadow mapping, and fog parameters
-- **Tree System** - Renders 15,000 trees with intelligent placement
-- **Building System** - Creates town-center buildings in 4×4 grid
-- **Particle System** - Manages 500 forest-band firefly particles above terrain
-- **Grass System** - Generates dense, static, slope-aligned grass across mountain surfaces
-- **Water System** - Creates dynamic water surface with wave displacement
-- **Rain System** - Rain particle simulation
-
-### Rendering Pipeline
-
-The application uses a **two-pass rendering approach**:
-
-1. **Depth Pass** - Renders scene from light's perspective to 2048×2048 depth texture
-2. **Color Pass** - Renders scene from camera with shadows applied via depth texture sampling
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation of all systems.
-
-## Visual Features
-
-### Lighting Effects
-- Dynamic sun orbit with realistic light attenuation
-- PCF (Percentage Closer Filtering) for soft shadow edges
-- Bias system to prevent shadow acne
-
-### Atmospheric Effects
-- Real-time volumetric fog with exponential squared formula
-- Dynamic fog color transitioning between day (light blue) and night (dark blue)
-- Procedural skybox with stars, planet, and atmospheric glow
-
-### Terrain Visualization
-- Height-based color banding: grass → dirt → rock → snow
-- Normal mapping derived from heightmap slopes
-- Phong lighting on all surfaces
-
-## Performance Considerations
-
-- **Instancing** - Trees, buildings, and grass rendered efficiently in batches
-- **Frustum Culling** - Optional optimization for large object counts
-- **Level of Detail** - Terrain LOD can be adjusted via grid resolution
-- **Shadow Type** - Directional shadows optimized for landscape rendering
-
-## Development Notes
-
-- **Shader Assets** - Located in `assets/shaders/`, automatically copied to build directory
-- **Camera Position** - Default spawn: (125, 200, 175) above town center
-- **Terrain Size** - 800×800 vertices spanning 800×800 world units
-- **Day Speed** - One full day/night cycle ≈ 63 seconds
+- Terrain world span: `800 x 800`
+- Camera spawn: `(125, 200, 175)`
+- Shadow map: `2048 x 2048`
+- Day speed (default free-run): one cycle ~63 seconds
+- Firefly placement band: elevation `8..85`
+- Fog model: exponential squared (`exp(-(distance * density)^2)`)
 
 ## Troubleshooting
 
-### Application won't build
-- Verify CMake is installed: `cmake --version`
-- Check GLFW3 installation: `pkg-config --modversion glfw3`
-- Ensure GLM headers are in system path: `find /usr/include -name glm`
-
-### Black screen on launch
-- Verify `assets/shaders/` directory exists in build output
-- Check OpenGL version support: `glxinfo | grep "OpenGL version"`
-- Try updating GPU drivers
-
-### Poor performance
-- Reduce terrain grid resolution in [Terrain.h](include/Terrain.h)
-- Lower shadow map resolution (2048 → 1024) in [LightingSystem.cpp](src/LightingSystem.cpp)
-- Reduce particle count in [ParticleSystem.h](include/ParticleSystem.h)
-
-## Further Reading
-
-For detailed system architecture and implementation specifics, see [ARCHITECTURE.md](ARCHITECTURE.md).
+- Black screen:
+  - Ensure `assets/shaders` is copied to `build/assets/shaders`
+  - Check OpenGL 3.3+ support
+- No shadows:
+  - Verify depth pass runs before color pass
+  - Confirm shadow map is bound to texture unit 1
+- Camera clipping terrain during cinematic:
+  - Confirm cinematic terrain safety clamp is enabled in `main_new.cpp`
+- Fireflies not visible in late shot:
+  - Check cinematic night progression and `fireflyBoost` uniforms in particle shader path
 
 ## License
 
-This project was developed as a Computer Graphics assignment. Uses GLAD for OpenGL loading and GLM for mathematics.
-
-## Credits
-
-- **GLFW** - Window management and input handling
-- **GLM** - Graphics mathematics
-- **GLAD** - OpenGL loader generator
-- **Perlin Noise** - Procedural terrain generation algorithm
+Developed as a Computer Graphics assignment using GLFW, GLM, and GLAD.
