@@ -8,6 +8,7 @@ public:
     ~LightingSystem();
 
     void Update(float currentTime);
+    void SetManualSunPosition(bool enabled, const glm::vec3& position);
 
     glm::vec3 GetSunPosition()   const { return sunPos; }
     glm::vec3 GetSunColor()      const { return lightColor; }
@@ -37,6 +38,8 @@ private:
 
     float daySpeed;
     float sunRadius;
+    bool manualSunEnabled;
+    glm::vec3 manualSunPosition;
 
     // Shadow mapping
     unsigned int depthMapFBO;

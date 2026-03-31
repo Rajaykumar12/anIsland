@@ -25,6 +25,7 @@ public:
            float pitch        = -35.0f);
 
     glm::mat4 GetViewMatrix() const;
+    void SetLookAt(const glm::vec3& position, const glm::vec3& target);
     void ProcessKeyboard(Camera_Movement direction, float deltaTime);
     void ProcessMouseMovement(float xoffset, float yoffset, bool constrainPitch = true);
     void ProcessMouseScroll(float yoffset);
