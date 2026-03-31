@@ -2,6 +2,7 @@
 out vec4 FragColor;
 
 uniform float dayIntensity;   // 0 = full night, 1 = full day
+uniform float fireflyBoost;
 
 void main()
 {
@@ -21,5 +22,6 @@ void main()
     float rg = 0.85 + 0.15 * gl_PointCoord.x;
     vec3  glowColor = vec3(rg, 1.0, 0.05);
 
-    FragColor = vec4(glowColor, alpha * 0.85 * nightFactor);
+    float boostedAlpha = alpha * 0.85 * nightFactor * fireflyBoost;
+    FragColor = vec4(glowColor, min(boostedAlpha, 1.0));
 }

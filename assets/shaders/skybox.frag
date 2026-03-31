@@ -4,6 +4,7 @@ out vec4 FragColor;
 in vec3 TexCoords;
 
 uniform vec3 sunPos;
+uniform float u_Time;
 
 // Pseudo-random hash functions for stars
 float hash(vec3 p) {
@@ -37,8 +38,9 @@ void generateStars(vec3 viewDir, float dayIntensity, inout vec3 skyColor) {
         else if(colorRand < 0.25)  starColor = mix(vec3(1.0,1.0,0.95), vec3(0.8,0.9,1.0), 0.4);
         
         float brightness = 0.7 + 0.3 * starValue1;
-        skyColor += starColor * brightness * glow * (0.8 + 0.2 * starVisibility);
-        skyColor += starColor * 0.15 * sin(gridCoord1.x * 0.5 + gridCoord1.y * 0.3) * glow * starVisibility;
+        float twinkle = 0.75 + 0.25 * sin(u_Time * 0.85 + gridCoord1.x * 0.5 + gridCoord1.y * 0.3);
+        skyColor += starColor * brightness * glow * (0.8 + 0.2 * starVisibility) * twinkle;
+        skyColor += starColor * 0.15 * sin(u_Time * 1.1 + gridCoord1.x * 0.5 + gridCoord1.y * 0.3) * glow * starVisibility;
     }
     
     // Layer 2: Medium secondary stars
@@ -49,7 +51,8 @@ void generateStars(vec3 viewDir, float dayIntensity, inout vec3 skyColor) {
         float dist = length(fractCoord);
         float glow = exp(-dist * dist * 25.0);
         vec3 starColor = mix(vec3(1.0,1.0,1.0), vec3(1.0,0.95,0.9), hash2(gridCoord2) * 0.3);
-        skyColor += starColor * (0.4+0.2*starValue2) * glow * 0.7 * starVisibility;
+        float twinkle = 0.80 + 0.20 * sin(u_Time * 1.3 + gridCoord2.x * 0.23 + gridCoord2.z * 0.41);
+        skyColor += starColor * (0.4+0.2*starValue2) * glow * 0.7 * starVisibility * twinkle;
     }
     
     // Layer 3: Faint tertiary stars
@@ -59,7 +62,8 @@ void generateStars(vec3 viewDir, float dayIntensity, inout vec3 skyColor) {
         vec3 fractCoord = fract(viewDir * 300.0) - 0.5;
         float dist = length(fractCoord);
         float glow = exp(-dist * dist * 40.0);
-        skyColor += vec3(1.0) * (0.15+0.1*starValue3) * glow * 0.5 * starVisibility;
+        float twinkle = 0.85 + 0.15 * sin(u_Time * 1.7 + gridCoord3.x * 0.17 + gridCoord3.y * 0.11);
+        skyColor += vec3(1.0) * (0.15+0.1*starValue3) * glow * 0.5 * starVisibility * twinkle;
     }
 }
 
